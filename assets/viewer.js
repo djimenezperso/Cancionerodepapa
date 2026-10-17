@@ -52,7 +52,12 @@ css.textContent+=
  ".lay:not(.wide) .rbar button{font-size:13px;padding:3px 8px;min-height:34px}"+
  ".lay:not(.wide) .rbar .grp{display:inline-flex;gap:3px;align-items:center}"+
  ".lay .bottom{position:sticky;bottom:0;z-index:4;background:var(--bg);padding-top:6px}"+
- ".lay .bottom .ed{max-height:34vh;overflow:auto;margin:0}";
+ ".lay .bottom{display:flex;flex-direction:column;gap:4px;max-height:38vh;overflow:auto}"+
+ ".lay .bottom .ed{margin:0}"+
+ ".lay .bottom .fold{align-self:flex-end;font:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);background:var(--sheet);color:var(--ink);border-radius:7px;padding:2px 10px;min-height:28px;cursor:pointer}"+
+ ".lay .bottom.folded .ed{display:none}"+
+ ".ed .one{display:flex;gap:6px;align-items:center;flex-wrap:nowrap;overflow:hidden}"+
+ ".ed .one .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}";
 document.head.appendChild(css);
 
 var NAMES=["Do","Re","Mi","Fa","Sol","La","Si"],SH=["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#","La","La#","Si"],FL=["Do","Reb","Re","Mib","Mi","Fa","Solb","Sol","Lab","La","Sib","Si"];
@@ -63,7 +68,7 @@ var PREF="cdp-visor-v1";
 try{ var sv=JSON.parse(localStorage.getItem(PREF)||"{}"); ["score","size","click","mel","edit"].forEach(function(k){ if(k in sv) st[k]=sv[k]; }); }catch(e){}
 function savePrefs(){ try{ localStorage.setItem(PREF,JSON.stringify({score:st.score,size:st.size,click:st.click,mel:st.mel,edit:st.edit})); }catch(e){} }
 var dict={on:false,rec:null,interim:"",last:"",undo:[],err:""};
-var S,pl=window.__vpl||(window.__vpl=new CORE.Player()),root=document.getElementById("app"),lastEl=null,dirty=false,selPath=null,selNote=0,selPaths=[],multi=false,ligar=false,showHelp=false,selRest=false;
+var S,pl=window.__vpl||(window.__vpl=new CORE.Player()),root=document.getElementById("app"),lastEl=null,dirty=false,selPath=null,selNote=0,selPaths=[],multi=false,ligar=false,showHelp=false,selRest=false,folded=false;
 
 function b(t,f,c,lab){ var e=document.createElement("button"); e.type="button"; e.textContent=t; e.onclick=f; if(c) e.className=c; if(lab) e.setAttribute("aria-label",lab); return e; }
 function sp(t,c){ var e=document.createElement("span"); e.className=c||"v"; e.textContent=t; return e; }
@@ -90,7 +95,10 @@ function show(){
   var wide=root.clientWidth>=760; lastWide=wide;
   var lay=document.createElement("div"); lay.className="lay"+(wide?" wide":""); var main=document.createElement("div"),side=document.createElement("div"); side.className="side";
   var panel=side; // en estrecho, los paneles van abajo y fijos
-  if(wide){ lay.append(main,side); } else { var bottom=document.createElement("div"); bottom.className="bottom"; lay.append(side,main,bottom); panel=bottom; }
+  if(wide){ lay.append(main,side); } else {
+    var bottom=document.createElement("div"); bottom.className="bottom"+(folded?" folded":""); lay.append(side,main,bottom); panel=bottom;
+    if(dict.on||selPath){ var fb=b(folded?"▴ Mostrar panel":"▾",function(){ folded=!folded; show(); },"fold",folded?"Mostrar panel":"Plegar panel"); bottom.appendChild(fb); }
+  }
   root.appendChild(lay);
   var bar=document.createElement("div"); bar.className="rbar";
   // 🎹 Piano y 🥁 Metrónomo se encienden y apagan; si alguno está encendido, suena
@@ -104,10 +112,13 @@ function show(){
   if(window.EDITABLE&&SR) bar.append(b(dict.on?"⏹ Parar dictado":"🎤 Dictar",function(){ if(dict.on) stopDict(); else startDict(); show(); },dict.on?"ok":""));
   if(dirty){ bar.append(b("💾 Guardar cambios",save,"ok"),b("Deshacer",function(){ S=JSON.parse(JSON.stringify(window.SONGS)); dirty=false; selPath=null; show(); })); }
   function grp(){ var g=document.createElement("div"); g.className="grp"; for(var i=0;i<arguments.length;i++) g.appendChild(arguments[i]); return g; }
-  bar.append(kb,mb,grp(sp("♩=","lbl"),b("−",function(){st.bpm=Math.max(30,st.bpm-4);restartPlay(s);show();},"","Más lento"),sp(st.bpm),b("+",function(){st.bpm=Math.min(240,st.bpm+4);restartPlay(s);show();},"","Más rápido")),
+  var moreOpen=wide||st.more;
+  bar.append(kb,mb);
+  if(!wide) bar.append(b(st.more?"⋯ Menos":"⋯",function(){ st.more=!st.more; show(); },"","Más controles"));
+  if(moreOpen) bar.append(grp(sp("♩=","lbl"),b("−",function(){st.bpm=Math.max(30,st.bpm-4);restartPlay(s);show();},"","Más lento"),sp(st.bpm),b("+",function(){st.bpm=Math.min(240,st.bpm+4);restartPlay(s);show();},"","Más rápido")),
     grp(sp("Tono","lbl"),b("−",function(){st.k=Math.max(-12,st.k-1);restartPlay(s);show();},"","Bajar medio tono toda la partitura"),sp((st.k>0?"+":"")+st.k),b("+",function(){st.k=Math.min(12,st.k+1);restartPlay(s);show();},"","Subir medio tono toda la partitura")));
   if(st.k&&window.EDITABLE) bar.append(b("Guardar en este tono",function(){ transposeAll(st.k); st.k=0; changed(); },"ok"));
-  bar.append(
+  if(moreOpen) bar.append(
     grp(b("A−",function(){st.size=Math.max(14,st.size-2);show();},"","Letra más pequeña"),b("A+",function(){st.size=Math.min(40,st.size+2);show();},"","Letra más grande")));
   side.appendChild(bar);
   if(dict.err){ var er=document.createElement("p"); er.className="hint"; er.textContent=dict.err; side.appendChild(er); dict.err=""; }
@@ -127,7 +138,7 @@ function show(){
       selNote=0; show(); });
     if(selPath&&dict.on&&!selRest){ pg.querySelectorAll('[data-p="'+selPath+'"]').forEach(function(x){x.classList.add("sel"); setTimeout(function(){ x.scrollIntoView({block:"center",behavior:"smooth"}); },30);}); }
     else if(selPath){
-      if(selRest){ pg.querySelectorAll('[data-rp="'+selPath+'"]').forEach(function(x){ x.classList.add("sel"); }); panel.appendChild(restEditor()); }
+      if(selRest){ pg.querySelectorAll('[data-rp="'+selPath+'"]').forEach(function(x){ x.classList.add("sel"); }); if(!dict.on) panel.appendChild(restEditor()); }
       else {
       if(!selPaths.length||selPaths.indexOf(selPath)<0) selPaths=[selPath];
       var se=[]; selPaths.forEach(function(sp2){ pg.querySelectorAll('[data-p="'+sp2+'"]').forEach(function(x){ x.classList.add("sel"); se.push(x); }); });
@@ -229,8 +240,9 @@ function restEditor(){
   top.append(sp("Silencio detrás de «"+(u.t||"")+"»","t"),sp(u.r?durText(u.r).replace(/ \(.*$/,""):"(hueco)","lbl"),
     b("🗑 Quitar",function(){ delete u.r; delete u.e; delete u.pos; selRest=false; changed(); },"pri"),
     b("✕",function(){ selRest=false; selPath=null; selPaths=[]; show(); },"","Cerrar"));
-  if(dirty) top.append(b("💾",save,"pri","Guardar"));
+  if(dirty&&!dict.on) top.append(b("💾",save,"pri","Guardar"));
   ed.append(top);
+  if(dict.on){ top.className="r one"; return ed; } // dictando: los cambios se dicen («añadir silencio de negra», «quitar silencio»)
   var r=document.createElement("div"); r.className="r"; r.append(sp("Cambiar a:","lbl"));
   DSHORT.forEach(function(d){ r.append(b(d[0],function(){ u.r=d[1]; delete u.e; changed(); })); });
   ed.append(r);
@@ -320,7 +332,7 @@ function listen(){
   r.onresult=function(e){
     var inter="";
     for(var i=e.resultIndex;i<e.results.length;i++){ var t=e.results[i][0].transcript; if(e.results[i].isFinal) runCmd(t); else inter+=t; }
-    dict.interim=inter; var el=document.getElementById("dict-live"); if(el) el.textContent=inter?"… "+inter:"";
+    dict.interim=inter; var el=document.getElementById("dict-live"); if(el) el.textContent=inter?"… "+inter:(dict.last?"✔ "+dict.last:"");
   };
   r.onerror=function(e){
     if(e.error==="not-allowed"||e.error==="service-not-allowed"){ dict.err="No hay permiso para usar el micrófono. Permítelo en el navegador y vuelve a pulsar «Dictar»."; stopDict(); show(); return; }
@@ -353,21 +365,22 @@ function textDict(){
   d.append(r2);
   return d;
 }
-function setStatus(t){ var el=document.getElementById("dict-status"); if(el) el.textContent=t; }
+function setStatus(t){ var el=document.getElementById("dict-status"); if(el) el.textContent=t.indexOf("Escuch")>=0?"🎙":"🔄"; }
 function stopDict(){ dict.on=false; dict.active=false; clearInterval(dict.watch); if(dict.rec){ try{ dict.rec.onend=null; dict.rec.stop(); }catch(e){} } dict.rec=null; }
 function dictPanel(){
   var d=document.createElement("div"); d.className="ed";
-  var r1=document.createElement("div"); r1.className="r";
   var u=selPath?unitAt(selPath):null;
-  var stEl=sp(dict.active?"🎙 Escuchando":"🔄 Reconectando…","lbl"); stEl.id="dict-status";
-  r1.append(stEl,sp(u?("«"+(u.t||"")+"» "+((u.n||[]).length>1?((u.n||[]).map(function(x,i){return i===selNote?"["+x+"]":x;}).join("-")+" (nota "+(selNote+1)+" de "+u.n.length+")"):((u.n||[]).join("-")||"—"))+(u.d?" · "+durText(u.d).replace(/ \(.*$/,""):"")):"","t"));
-  r1.append(el2("sepv"),b("◀",function(){ move(-1); },"","Anterior"),b("▶",function(){ move(1); },"","Siguiente"),b("↩",undoCmd,"","Deshacer"),b("?",function(){ showHelp=!showHelp; show(); },showHelp?"on":"","Ayuda"));
-  if(dirty) r1.append(b("💾 Guardar",save,"pri"));
+  var r1=document.createElement("div"); r1.className="r one";
+  var stEl=sp(dict.active?"🎙":"🔄","lbl"); stEl.id="dict-status";
+  var cur=u&&selRest?("Silencio detrás de «"+(u.t||"")+"»: "+(u.r?durText(u.r).replace(/ \(.*$/,""):"hueco")):u?("«"+(u.t||"")+"» "+((u.n||[]).length>1?((u.n||[]).map(function(x,i){return i===selNote?"["+x+"]":x;}).join("-")):((u.n||[]).join("-")||"—"))+(u.d?" · "+durText(u.d).replace(/ \(.*$/,""):"")):"";
+  r1.append(stEl,sp(cur,"t"),b("◀",function(){ move(-1); },"","Anterior"),b("▶",function(){ move(1); },"","Siguiente"),b("↩",undoCmd,"","Deshacer"),b("?",function(){ showHelp=!showHelp; show(); },showHelp?"on":"","Ayuda"));
+  if(dirty) r1.append(b("💾",save,"pri","Guardar"));
   d.append(r1);
-  var live=document.createElement("p"); live.id="dict-live"; live.className="live"; live.textContent=dict.interim?"… "+dict.interim:(dict.last?"":"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…"); d.append(live);
-  if(dict.last){ var la=document.createElement("p"); la.className="done"; la.textContent="✔ "+dict.last; d.append(la); }
+  var live=document.createElement("p"); live.id="dict-live"; live.className="live";
+  live.textContent=dict.interim?"… "+dict.interim:(dict.last?"✔ "+dict.last:"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…");
+  d.append(live);
   if(showHelp){ var h=document.createElement("p"); h.className="help";
-    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». «Bien» deja la nota igual y pasa a la siguiente. «Añadir silencio de negra» suma un silencio detrás; «añadir Fa negra» mete una nota nueva a la derecha. «Separar» parte la palabra en sílabas (una nota en cada una) y «unir» la junta con la siguiente. «Una sola nota» deja una sola nota en esa sílaba (o «quitar nota» quita la nota marcada). «Cuatro corcheas» pone corchea a las 4 siguientes («tres bien» salta tres). «Guardar» guarda los cambios. Silencios: «silencio de negra» (va detrás de la nota que acabas de decir), «Fa negra, silencio de corchea», «quitar silencio». Otras: «anterior», «ir a love», «tiempo uno», «deshacer».";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra». «Bien» deja la nota igual. «Cuatro corcheas» pone corchea a las 4 siguientes. «Añadir silencio de negra», «añadir Fa negra». «Separar», «unir», «una sola nota». «Silencio de negra», «quitar silencio», «anterior», «ir a love», «deshacer», «guardar».";
     d.append(h); }
   return d;
 }
@@ -518,7 +531,7 @@ function start(){
   if(!S.length){ root.textContent="No hay canciones."; return; }
   if(S.length===1){ st.i=0; if(!window.__vstarted) st.bpm=S[0].tempo||80; window.__vstarted=true; show(); } else list();
 }
-window.__viewerStart=start;
+window.__viewerStart=start; window.__dict=function(){ return {on:dict.on,active:dict.active,err:dict.err}; };
 window.__dictTest=function(t){ st.edit=true; if(!selPath) selPath=allPaths()[0]; runCmd(t); return {song:S[st.i],sel:selPath,last:dict.last}; };
 start();
 })();
