@@ -259,10 +259,10 @@ function dictPanel(){
   r1.append(el2("sepv"),b("◀",function(){ move(-1); },"","Anterior"),b("▶",function(){ move(1); },"","Siguiente"),b("↩",undoCmd,"","Deshacer"),b("?",function(){ showHelp=!showHelp; show(); },showHelp?"on":"","Ayuda"));
   if(dirty) r1.append(b("💾 Guardar",save,"pri"));
   d.append(r1);
-  var live=document.createElement("p"); live.id="dict-live"; live.className="live"; live.textContent=dict.interim?"… "+dict.interim:(dict.last?"":"Habla: «Fa negra», «bien», «silencio de negra»…"); d.append(live);
+  var live=document.createElement("p"); live.id="dict-live"; live.className="live"; live.textContent=dict.interim?"… "+dict.interim:(dict.last?"":"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…"); d.append(live);
   if(dict.last){ var la=document.createElement("p"); la.className="done"; la.textContent="✔ "+dict.last; d.append(la); }
   if(showHelp){ var h=document.createElement("p"); h.className="help";
-    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». «Bien» deja la nota igual y pasa a la siguiente. Silencios: «silencio de negra» (va detrás de la nota que acabas de decir), «Fa negra, silencio de corchea», «quitar silencio». Otras: «anterior», «ir a love», «tiempo uno», «deshacer».";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». «Bien» deja la nota igual y pasa a la siguiente. «Guardar» guarda los cambios. Silencios: «silencio de negra» (va detrás de la nota que acabas de decir), «Fa negra, silencio de corchea», «quitar silencio». Otras: «anterior», «ir a love», «tiempo uno», «deshacer».";
     d.append(h); }
   return d;
 }
@@ -273,8 +273,16 @@ var DURW={redonda:4,redondas:4,blanca:2,blancas:2,negra:1,negras:1,corchea:0.5,c
 var NOTEW={"do":"Do","re":"Re","mi":"Mi","fa":"Fa","sol":"Sol","la":"La","si":"Si","sí":"Si"};
 function norm(t){ return String(t).toLowerCase().replace(/[áàä]/g,"a").replace(/[éè]/g,"e").replace(/[íì]/g,"i").replace(/[óò]/g,"o").replace(/[úü]/g,"u").replace(/[.,;:!¿?¡]/g," ").replace(/\s+/g," ").trim(); }
 function undoCmd(){ if(!dict.undo.length) return; var u=dict.undo.pop(); S[st.i]=u.song; selPath=u.sel; dict.last="Deshecho"; dirty=true; show(); }
+var SAVEW={guardar:1,guarda:1,guardalo:1,guardala:1,guardame:1,graba:1,grabar:1,terminar:1,termina:1,terminado:1};
 function runCmd(raw){
   var w=norm(raw).split(" ").filter(Boolean); if(!w.length) return;
+  var wantSave=w.some(function(x){ return SAVEW[x]; });
+  if(wantSave){
+    w=w.filter(function(x){ return !SAVEW[x]&&x!=="cambios"&&x!=="los"&&x!=="todo"; });
+    if(w.length) runCmd(w.join(" "));
+    if(dirty){ dict.last="Guardando…"; save(); } else { dict.last="No hay cambios que guardar"; show(); }
+    return;
+  }
   // trocear en órdenes: tras una figura, una nota nueva (o «igual») empieza la sílaba siguiente
   var segs=[],cur=[],seenDur=false;
   for(var i=0;i<w.length;i++){
