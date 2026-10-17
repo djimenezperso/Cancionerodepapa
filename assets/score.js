@@ -19,6 +19,11 @@ function spell(raw,k){
   return {midi:midi,letter:n[0],acc:n.slice(1),oct:Math.floor(midi/12)-1};
 }
 var DURS=[16,12,8,6,4,3,2,1];
+function splitRest(off,d,U){ // un silencio que empieza a contratiempo: primero hasta el siguiente tiempo, luego tiempos enteros
+  var out=[],first=off%U?Math.min(d,U-off%U):0;
+  if(first){ out=out.concat(split(first)); d-=first; }
+  return out.concat(split(d));
+}
 function split(d){ var out=[]; while(d>0){ for(var i=0;i<DURS.length;i++){ if(DURS[i]<=d){ out.push(DURS[i]); d-=DURS[i]; break; } } } return out; }
 
 /* ---------- modelo: compases con notas y silencios ---------- */
@@ -64,7 +69,7 @@ function build(song,k){
     var t=p.s,left=p.d,firstSeg=true;
     while(left>0){
       var bi=Math.floor(t/B),room=(bi+1)*B-t,take=Math.min(room,left);
-      var parts=split(take);
+      var parts=p.rest?splitRest(t%B,take,U):split(take);
       parts.forEach(function(d,pi){
         var seg={rest:p.rest,d:d,note:p.note,path:p.path,mark:p.mark,owner:p.owner,fill:p.fill};
         if(firstSeg){ seg.lyric=p.lyric; seg.extraLyric=p.extraLyric; seg.cues=p.cues; seg.mel=p.mel; }
