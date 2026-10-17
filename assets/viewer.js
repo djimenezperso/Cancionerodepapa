@@ -340,7 +340,7 @@ function dictPanel(){
   var r1=document.createElement("div"); r1.className="r";
   var u=selPath?unitAt(selPath):null;
   var stEl=sp(dict.active?"🎙 Escuchando":"🔄 Reconectando…","lbl"); stEl.id="dict-status";
-  r1.append(stEl,sp(u?("«"+(u.t||"")+"» "+((u.n||[]).join("-")||"—")+(u.d?" · "+durText(u.d).replace(/ \(.*$/,""):"")):"","t"));
+  r1.append(stEl,sp(u?("«"+(u.t||"")+"» "+((u.n||[]).length>1?((u.n||[]).map(function(x,i){return i===selNote?"["+x+"]":x;}).join("-")+" (nota "+(selNote+1)+" de "+u.n.length+")"):((u.n||[]).join("-")||"—"))+(u.d?" · "+durText(u.d).replace(/ \(.*$/,""):"")):"","t"));
   r1.append(el2("sepv"),b("◀",function(){ move(-1); },"","Anterior"),b("▶",function(){ move(1); },"","Siguiente"),b("↩",undoCmd,"","Deshacer"),b("?",function(){ showHelp=!showHelp; show(); },showHelp?"on":"","Ayuda"));
   if(dirty) r1.append(b("💾 Guardar",save,"pri"));
   d.append(r1);
@@ -401,7 +401,7 @@ function runCmd(raw){
 function applyTokens(w,raw){
   var s=S[st.i],paths=allPaths(); if(!selPath) selPath=paths[0];
   var snapshot={song:JSON.parse(JSON.stringify(s)),sel:selPath};
-  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[];
+  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false;
   for(var i=0;i<w.length;i++){
     var x=w[i];
     if(x==="deshacer"||x==="deshaz"){ undoCmd(); return false; }
@@ -431,6 +431,14 @@ function applyTokens(w,raw){
     return; }
   var u=unitAt(selPath),changedSome=false;
   if(clear){ delete u.d; delete u.r; changedSome=true; did.push("sin duración"); }
+  var melis=(u.n||[]).length>1&&notes.length<=1; // palabra con varias notas: se dicta nota a nota dentro de ella
+  if(melis&&selNote>=(u.n||[]).length) selNote=0;
+  if(notes.length===1&&!keep&&melis){
+    var pvm=parse(u.n[selNote]),ntm=notes[0],om=ntm.o;
+    if(om===null){ var refm=midiOf(pvm),bm=null; for(var oc2=1;oc2<=7;oc2++){ var dm=Math.abs(midiOf({l:ntm.l,a:ntm.a,o:oc2})-refm); if(bm===null||dm<bm){ bm=dm; om=oc2; } } }
+    u.n[selNote]=fmt({l:ntm.l,a:ntm.a,o:om}); beep(u.n[selNote]); changedSome=true; did.push("nota "+(selNote+1)+": "+u.n[selNote]);
+    notes=[]; melisDone=true;
+  }
   if(notes.length&&!keep){
     var prev=(u.n||[]).map(parse);
     u.n=notes.map(function(nt,ix){ var o=nt.o; if(o===null){ var pv=prev[ix]||prev[0]; o=3;
@@ -438,7 +446,10 @@ function applyTokens(w,raw){
       return fmt({l:nt.l,a:nt.a,o:o}); });
     beep(u.n[0]); changedSome=true; did.push(u.n.join("-"));
   }
-  if(hasDur){ u.d=Math.round(dur*1000)/1000; delete u.pos; delete u.e; changedSome=true; did.push(durText(u.d)); }
+  if(hasDur){
+    if(melis){ u.d=Math.round(((selNote>0?(u.d||0):0)+dur)*1000)/1000; did.push("nota "+(selNote+1)+" de "+u.n.length+": "+durText(dur).replace(/ \(.*$/,"")); }
+    else { u.d=Math.round(dur*1000)/1000; did.push(durText(u.d)); }
+    delete u.pos; delete u.e; changedSome=true; }
   if(rest!==null){
     // un silencio dicho solo va detrás de la nota que se acaba de dictar
     var target=u,onlyRest=!notes.length&&!hasDur&&beat===null&&!clear;
@@ -450,8 +461,11 @@ function applyTokens(w,raw){
   if(beat){ u.b=beat; changedSome=true; did.push("tiempo "+beat); }
   if(changedSome){ dict.undo.push(snapshot); if(dict.undo.length>50) dict.undo.shift(); dirty=true; dict.last="«"+(u.t||"")+"»: "+did.join(", "); }
   if(changedSome&&(notes.length||hasDur)) lastApplied=selPath;
+  if(nav>0&&!changedSome&&(u.n||[]).length>1&&selNote<u.n.length-1){ selNote++; dict.last="«"+(u.t||"")+"» nota "+selNote+" bien → nota "+(selNote+1); return; }
   if(nav) { if(nav>0) lastApplied=selPath; var ix2=paths.indexOf(selPath)+nav; if(ix2>=0&&ix2<paths.length){ selPath=paths[ix2]; selNote=0; } if(!changedSome) dict.last="«"+(unitAt(paths[Math.max(0,ix2-nav)]).t||"")+"» bien → siguiente"; }
-  else if(changedSome&&(notes.length||hasDur)){ var ix3=paths.indexOf(selPath)+1; if(ix3<paths.length){ selPath=paths[ix3]; selNote=0; } }
+  else if(changedSome&&(notes.length||hasDur||melisDone)){
+    if(melis&&selNote<u.n.length-1&&(hasDur||melisDone)){ selNote++; }
+    else { var ix3=paths.indexOf(selPath)+1; if(ix3<paths.length){ selPath=paths[ix3]; selNote=0; } } }
   selPaths=[selPath];
   if(!changedSome&&!nav){ dict.last="No he entendido: «"+raw.trim()+"»"; }
 }
