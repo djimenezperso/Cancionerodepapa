@@ -64,3 +64,5 @@ html,body{background:var(--bg);color:var(--ink)}
 .score .sn.now line,.score .sn.now path{stroke:var(--beat-odd)}
 .score-note{font-size:13px;color:var(--muted);margin:10px 0 0}
 .score .hit{fill:transparent;stroke:none}
+.score .sr.sel .rhit{fill:var(--now);stroke:var(--beat-odd);stroke-width:1.5}
+.editing .score .sr[data-rp]{cursor:pointer}
