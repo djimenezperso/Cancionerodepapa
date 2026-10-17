@@ -72,7 +72,7 @@ def normalize(x: dict | None) -> dict:
                         nu[k] = True
                 if u.get("x"):
                     nu["x"] = str(u["x"])[:4]
-                for k in ("pos", "e"):
+                for k in ("pos", "e", "d", "r"):
                     v = _num(u.get(k))
                     if v is not None:
                         nu[k] = round(v, 4)
@@ -98,6 +98,28 @@ def _num(v):
         return f if f == f else None  # descarta NaN
     except Exception:
         return None
+
+
+DURATIONS = [("redonda", 4), ("blanca con puntillo", 3), ("blanca", 2), ("negra con puntillo", 1.5), ("negra", 1),
+             ("corchea con puntillo", 0.75), ("corchea", 0.5), ("semicorchea", 0.25)]
+DUR_LABELS = [f"{n} ({v:g})" for n, v in DURATIONS]
+
+
+def dur_label(v):
+    v = _num(v)
+    if v is None:
+        return None
+    for n, x in DURATIONS:
+        if abs(x - v) < 1e-6:
+            return f"{n} ({x:g})"
+    return f"{v:g} pulsos"
+
+
+def dur_value(label):
+    if label is None or label == "":
+        return None
+    m = re.search(r"\(([\d.]+)\)|^([\d.]+)", str(label))
+    return _num(m.group(1) or m.group(2)) if m else None
 
 
 def apply_rhythm(song: dict, result: dict) -> dict:
@@ -351,6 +373,7 @@ PROMPT = """Las imágenes son fotos (en orden) de una hoja de estudio de canto e
 
 CÓMO ESCRIBE ÉL:
 - Encima de cada sílaba, en rojo, la NOTA de la melodía en solfeo: Do, Re, Mi, Fa, Sol, La, Si, con # o b (Sib = Si bemol, Mib = Mi bemol). Un número pegado a la nota (Re4, Do#4) es la octava: cópialo. Si no lleva número, no lo inventes.
+- OJO CON SU LETRA: en su escritura "Fa" y "La" se parecen mucho (la F mayúscula manuscrita puede parecer una L), y también "Sol" y "Si", o "Mi" y "Mib" si el bemol es pequeño. Fíjate en la raya horizontal de arriba de la F. Si dudas, decide por la melodía (lo normal es que las notas vayan por pasos cortos, sin saltos raros) y, si reconoces la canción, por cómo es la melodía de verdad. Anota en "doubts" las que no tengas claras.
 - Dos notas unidas con guion sobre una misma sílaba ("Sib-Re#", "La-La", "Sol-Sol") son varias notas en esa sílaba: van juntas en la lista "n" de esa sílaba.
 - Números de colores (azul y verde, del 1 al 4 normalmente) delante de una nota = el TIEMPO del compás en el que cae esa nota → campo "b". "4-1" detrás de una nota = se aguanta hasta el tiempo 1 → "u":1. Una secuencia como "1 Do4 2 3 4 1 2" = la nota empieza en 1 y se aguanta hasta el último número → "b":1,"u":2. Una raya larga con un número encima que abarca varias notas indica que esas notas entran dentro de ese tiempo: pon el número solo en la primera.
 - Notas resaltadas en amarillo → "mark": true.
@@ -367,12 +390,13 @@ CÓMO DEVOLVERLO:
 - Escribe la letra en minúsculas normales (mayúscula solo al principio del verso y en nombres), tal y como está escrita, sin corregirla ni traducirla.
 - "ts": el compás ("2/4", "3/4", "4/4", "6/8" o "12/8"). Dedúcelo del número de tiempo más alto que use y de las pistas de la hoja; si reconoces la canción por el título, úsalo para confirmarlo.
 - TIEMPOS Y ANACRUSA: si la hoja trae números de tiempo, respétalos tal cual. Si en algún verso NO hay números, propón tú "b" en las sílabas que caen en tiempo, colocando el tiempo 1 (el golpe fuerte) en la sílaba acentuada de la frase. Muchas canciones empiezan en ANACRUSA: las primeras sílabas van antes del primer tiempo fuerte (por ejemplo, en "and I love you so" el 1 cae en "love" o en "so", no en "and"), así que esas sílabas iniciales llevan tiempos como 3 o 4 del compás anterior. Si reconoces la canción, usa cómo se canta de verdad para decidir dónde cae el 1.
+- DURACIONES: en cada unidad con nota pon "d" = cuánto dura, en pulsos (negra = 1, corchea = 0.5, semicorchea = 0.25, negra con puntillo = 1.5, blanca = 2, blanca con puntillo = 3, redonda = 4; en compases de 6/8 o 12/8 el pulso es la corchea). Tienen que cuadrar con los números de tiempo: sumando las duraciones desde una sílaba con número, la siguiente sílaba con número debe caer exactamente en su tiempo. Si la nota se aguanta ("4-1"), su "d" lo incluye. Si después de una sílaba hay un silencio o respiración antes de la siguiente frase, pon "r" = duración del silencio en pulsos. Si reconoces la canción, usa su ritmo real.
 - "tempo": negras por minuto aproximadas (si reconoces la canción, su velocidad habitual; si no, 80).
 - "doubts": lista corta de cosas que no se leían bien (ejemplo: "verso 3: ¿Sib o Si?"). Vacía si todo está claro.
 
 Responde solo con JSON con esta forma:
 {"title":"...","page":"4","ts":"4/4","tempo":72,"general":["..."],"doubts":["..."],
- "sections":[{"label":"","lines":[{"cues":["No perder metal"],"units":[{"t":"My","n":["Lab"],"b":4},{"t":"emp-","n":["Sib","Re#"],"b":1},{"t":"ty","n":[]},{"t":"arms","n":["Re#"],"b":3,"u":1,"mark":true}]}]}]}"""
+ "sections":[{"label":"","lines":[{"cues":["No perder metal"],"units":[{"t":"My","n":["Lab"],"b":4,"d":1},{"t":"emp-","n":["Sib","Re#"],"b":1,"d":1},{"t":"ty","n":[],"d":1},{"t":"arms","n":["Re#"],"b":3,"u":1,"mark":true,"d":3,"r":1}]}]}]}"""
 
 
 class ReadError(Exception):
@@ -481,6 +505,79 @@ def _read_anthropic(images: list[bytes], api_key: str, model: str, title_hint: s
     return _finish(text, msg.stop_reason == "max_tokens", title_hint)
 
 
+RHYTHM_PROMPT = """Esta es una canción de una hoja de estudio de canto, ya pasada a datos. Cada sílaba tiene sus notas ("n") y, a veces, el tiempo del compás donde cae ("b", del 1 al número de tiempos del compás) y hasta qué tiempo se aguanta ("u").
+
+Propón el RITMO: para cada sílaba, en el mismo orden, "d" = duración en pulsos (negra = 1, corchea = 0.5, semicorchea = 0.25, negra con puntillo = 1.5, blanca = 2, blanca con puntillo = 3, redonda = 4; en 6/8 o 12/8 el pulso es la corchea) y "r" = silencio después en pulsos (0 si no hay).
+
+Reglas:
+- Respeta los números de tiempo: sumando duraciones y silencios desde una sílaba con "b", la siguiente sílaba con "b" debe caer exactamente en su tiempo.
+- La canción puede empezar en anacrusa (antes del tiempo 1).
+- Las sílabas sin nota también llevan duración.
+- Si reconoces la canción por el título, usa su ritmo real.
+
+Responde solo con JSON: {"units":[{"d":1,"r":0}, ...]} con exactamente %d elementos.
+
+Compás: %s
+Título: %s
+Sílabas:
+%s"""
+
+
+def _complete_text(prompt: str, api_key: str, model: str, provider: str) -> str:
+    if provider == "openai":
+        import openai
+
+        client = openai.OpenAI(api_key=api_key)
+        try:
+            r = client.chat.completions.create(model=model, messages=[{"role": "user", "content": prompt}], response_format={"type": "json_object"}, max_completion_tokens=8000)
+        except openai.APIError as e:
+            raise ReadError(f"OpenAI ha devuelto un error: {e}") from e
+        return r.choices[0].message.content or ""
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        r = client.messages.create(model=model, max_tokens=8000, messages=[{"role": "user", "content": prompt}])
+    except anthropic.APIError as e:
+        raise ReadError(f"La API ha devuelto un error: {e}") from e
+    return "".join(getattr(b, "text", "") for b in r.content)
+
+
+def estimate_rhythm(song: dict, api_key: str, model: str, provider: str) -> dict:
+    """Pide a la IA la duración de cada sílaba (sin foto) y la guarda en la canción."""
+    flat = [u for sec in song.get("sections", []) for line in sec.get("lines", []) for u in line.get("units", [])]
+    if not flat:
+        raise ReadError("La canción no tiene sílabas.")
+    lines = []
+    for i, u in enumerate(flat, 1):
+        extra = (f" tiempo {u['b']}" if u.get("b") else "") + (f" hasta {u['u']}" if u.get("u") else "")
+        lines.append(f"{i}. «{u.get('t', '')}» notas: {'-'.join(u.get('n') or []) or '—'}{extra}")
+    text = _complete_text(RHYTHM_PROMPT % (len(flat), song.get("ts", "4/4"), song.get("title", ""), "\n".join(lines)), api_key, model, provider)
+    try:
+        data = _parse_json(text)
+        units = data["units"] if isinstance(data, dict) else data
+    except Exception as e:
+        raise ReadError("No se ha podido entender la respuesta. Prueba otra vez.") from e
+    if len(units) != len(flat):
+        raise ReadError(f"La IA devolvió {len(units)} duraciones para {len(flat)} sílabas. Prueba otra vez.")
+    new = json.loads(json.dumps(song))
+    i = 0
+    for sec in new.get("sections", []):
+        for line in sec.get("lines", []):
+            for u in line.get("units", []):
+                d, r = _num(units[i].get("d")), _num(units[i].get("r"))
+                u.pop("pos", None)
+                u.pop("e", None)
+                if d and d > 0:
+                    u["d"] = d
+                if r and r > 0:
+                    u["r"] = r
+                else:
+                    u.pop("r", None)
+                i += 1
+    return normalize(new)
+
+
 def song_from_text(title: str, ts: str, lyrics: str) -> dict:
     sections, cur = [], None
     for line in lyrics.splitlines():
@@ -516,8 +613,8 @@ def song_to_rows(song: dict) -> tuple[list[dict], list[dict]]:
                         "subrayado": bool(u.get("acc")),
                         "pausa": bool(u.get("pause")),
                         "círculo": u.get("x", ""),
-                        "inicio": u.get("pos"),
-                        "fin": u.get("e"),
+                        "duración": dur_label(u.get("d")),
+                        "silencio": u.get("r"),
                     }
                 )
     return units, lines
@@ -553,8 +650,8 @@ def rows_to_song(meta: dict, units: list[dict], lines: list[dict]) -> dict:
                 "acc": bool(clean(r.get("subrayado"))),
                 "pause": bool(clean(r.get("pausa"))),
                 "x": str(clean(r.get("círculo")) or ""),
-                "pos": _num(clean(r.get("inicio"))),
-                "e": _num(clean(r.get("fin"))),
+                "d": dur_value(clean(r.get("duración"))),
+                "r": _num(clean(r.get("silencio"))),
             }
         )
     info = {}
@@ -583,6 +680,11 @@ def rows_to_song(meta: dict, units: list[dict], lines: list[dict]) -> dict:
 def _assets():
     core = (ASSETS / "core.js").read_text("utf-8") + "\n" + (ASSETS / "score.js").read_text("utf-8")
     return (ASSETS / "core.css").read_text("utf-8"), core, (ASSETS / "viewer.js").read_text("utf-8")
+
+
+def visor_assets() -> tuple[str, str]:
+    css, core, viewer = _assets()
+    return css, core + "\n" + viewer
 
 
 FONTS = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Kalam:wght@400;700&display=swap">'
