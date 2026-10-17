@@ -381,7 +381,7 @@ function dictPanel(){
   live.textContent=dict.interim?"… "+dict.interim:(dict.last?"✔ "+dict.last:"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…");
   d.append(live);
   if(showHelp){ var h=document.createElement("p"); h.className="help";
-    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra». «Bien» deja la nota igual. «Cuatro corcheas» pone corchea a las 4 siguientes. «Añadir silencio de negra», «añadir Fa negra». «Eliminar» borra lo marcado (un silencio, una nota o la sílaba entera). «Separar», «unir», «una sola nota». «Silencio de negra», «quitar silencio», «anterior», «ir a love», «deshacer», «guardar».";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra». «Bien» deja la nota igual. «Cuatro corcheas» pone corchea a las 4 siguientes. «Añadir silencio de negra», «añadir Fa negra». «Octava arriba» / «octava abajo» sube o baja la nota marcada una octava («medio tono arriba/abajo» también). «Eliminar» borra lo marcado (un silencio, una nota o la sílaba entera). «Separar», «unir», «una sola nota». «Silencio de negra», «quitar silencio», «anterior», «ir a love», «deshacer», «guardar».";
     d.append(h); }
   return d;
 }
@@ -448,7 +448,23 @@ function runCmd(raw){
   if(multiMsg) dict.last=multiMsg;
   show();
 }
+function shiftCmd(w){
+  // «octava arriba/abajo», «sube una octava», «medio tono arriba/abajo»: cambia la nota marcada sin pasar a la siguiente
+  var up=w.some(function(x){return /^(arriba|alta|alto|subir|sube|subela|subelo|encima|aguda)$/.test(x);}),down=w.some(function(x){return /^(abajo|baja|bajo|bajar|bajala|bajalo|debajo|grave)$/.test(x);});
+  var oct=w.indexOf("octava")>=0||w.indexOf("octavas")>=0,semi=w.indexOf("tono")>=0||w.indexOf("semitono")>=0;
+  if(!(oct||semi)||up===down) return 0;
+  return (up?1:-1)*(oct?12:1);
+}
 function applyTokens(w,raw){
+  var sh=shiftCmd(w);
+  if(sh&&selPath&&!selRest){
+    var su=unitAt(selPath); if(!(su.n||[]).length) return;
+    dict.undo.push({song:JSON.parse(JSON.stringify(S[st.i])),sel:selPath}); dirty=true;
+    var ix=(su.n.length>1)?Math.min(selNote,su.n.length-1):0;
+    su.n[ix]=fmt(fromMidi(midiOf(parse(su.n[ix]))+sh,sh>0)); beep(su.n[ix]);
+    dict.last="«"+(su.t||"")+"»: "+su.n[ix]+(Math.abs(sh)===12?(sh>0?" (octava arriba)":" (octava abajo)"):(sh>0?" (medio tono arriba)":" (medio tono abajo)"));
+    return;
+  }
   var s=S[st.i],paths=allPaths(); if(!selPath) selPath=paths[0];
   var snapshot={song:JSON.parse(JSON.stringify(s)),sel:selPath};
   var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false,single=0,addMode=false;
