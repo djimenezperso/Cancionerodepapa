@@ -56,7 +56,7 @@ function build(song,k){
     var n=e.notes.length,len=e.e-e.s,each=Math.max(1,Math.floor(len/n)),t=e.s,nd=e.u.nd&&e.u.nd.length===n?e.u.nd:null,ndSum=nd?nd.reduce(function(a,x){return a+x;},0):0;
     e.notes.forEach(function(nt,ix){
       var d=ix===n-1?e.e-t:(nd?Math.max(1,Math.round(nd[ix]*len/ndSum)):each);
-      pieces.push({rest:false,s:t,d:d,note:nt,lyric:ix===0?(e.u.t||""):null,mel:ix>0,cues:ix===0?e.cues:[],path:e.path,mark:!!e.u.mark,pause:ix===n-1&&!!e.u.pause});
+      pieces.push({rest:false,s:t,d:d,note:nt,lyric:ix===0?(e.u.t||""):null,mel:ix>0,cues:ix===0?e.cues:[],path:e.path,mark:!!e.u.mark,rec:(e.u.rec||[]).indexOf(ix)>=0,pause:ix===n-1&&!!e.u.pause});
       t+=d;
     });
     cur=e.e;
@@ -72,7 +72,7 @@ function build(song,k){
       var parts=p.rest?splitRest(t%B,take,U):split(take);
       parts.forEach(function(d,pi){
         var seg={rest:p.rest,d:d,note:p.note,path:p.path,mark:p.mark,owner:p.owner,fill:p.fill};
-        if(firstSeg){ seg.lyric=p.lyric; seg.extraLyric=p.extraLyric; seg.cues=p.cues; seg.mel=p.mel; }
+        if(firstSeg){ seg.rec=p.rec; seg.lyric=p.lyric; seg.extraLyric=p.extraLyric; seg.cues=p.cues; seg.mel=p.mel; }
         else if(!p.rest) seg.cont=true;
         firstSeg=false;
         if(!p.rest&&(left-d>0)) seg.tie=true;
@@ -190,7 +190,7 @@ function render(song,root,o){
   meta.textContent="♩ = "+(song.tempo||80)+(k?"   ·   Tono "+(k>0?"+":"")+k:"")+(m.octUp?"   ·   Clave de sol octava baja (voz de hombre)":"");
   wrap.appendChild(meta);
   // alteraciones a mostrar (se reinician en cada compás)
-  m.bars.forEach(function(bar){ var state={}; bar.forEach(function(it){ if(it.rest||!it.note) return; var key=it.note.letter+it.note.oct,acc=it.note.acc||"n",prev=state[key]||"n"; if(it.cont){ state[key]=acc; return; } it.showAcc=acc!==prev?acc:null; state[key]=acc; }); });
+  m.bars.forEach(function(bar){ var state={}; bar.forEach(function(it){ if(it.rest||!it.note) return; var key=it.note.letter+it.note.oct,acc=it.note.acc||"n",prev=state[key]||"n"; if(it.cont){ state[key]=acc; return; } it.showAcc=(acc!==prev||it.rec)?acc:null; state[key]=acc; }); });
   var W=Math.max(300,(root.clientWidth||wrap.clientWidth||700)-4),HEAD=46,TS=22;
   var bw=m.bars.map(function(bar){ return 14+bar.reduce(function(a,it){ return a+itemWidth(it); },0); });
   var systems=[],cur=[],used=0;
