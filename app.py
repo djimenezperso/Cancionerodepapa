@@ -44,23 +44,26 @@ else:
     PROVIDER, KEY, MODEL = "", "", ""
 
 
-@st.cache_resource(show_spinner="Cargando canciones…")
-def sync_store(token, repo, attempt=0):
+def sync_store(force=False):
+    """Trae las canciones de la rama «datos» de GitHub. Se repite en cada visita nueva y, como mucho, cada minuto:
+    al actualizar la app, Streamlit devuelve la carpeta songs/ a la versión del repositorio y hay que recuperarlas."""
     import time
 
-    err = lib.gh_sync(token, repo)
-    for _ in range(2):  # reintento si GitHub falla justo al arrancar
-        if not err:
-            break
-        time.sleep(2)
-        err = lib.gh_sync(token, repo)
-    return err
+    tok, repo = secret("GITHUB_TOKEN"), secret("GITHUB_REPO")
+    if not tok or not repo:
+        return ""
+    lib.GH.update(token=tok.strip(), repo=repo.strip().strip("/"))
+    if force or not st.session_state.get("synced") or time.time() - lib.GH.get("last", 0) > 60:
+        err = lib.gh_sync(tok, repo)
+        if err:
+            time.sleep(1.5)
+            err = lib.gh_sync(tok, repo)
+        st.session_state.synced = True
+        st.session_state.sync_err = err
+    return st.session_state.get("sync_err", "")
 
 
-st.session_state.setdefault("sync_attempt", 0)
-SYNC_ERR = sync_store(secret("GITHUB_TOKEN"), secret("GITHUB_REPO"), st.session_state.sync_attempt)
-if not lib.gh_enabled():  # el proceso se reutiliza entre visitas: se reactiva sin volver a descargar
-    lib.GH.update(token=secret("GITHUB_TOKEN").strip(), repo=secret("GITHUB_REPO").strip().strip("/"))
+SYNC_ERR = sync_store()
 
 # --------------------------------------------------------------------------- utilidades
 
@@ -437,7 +440,7 @@ with tab_go:
         if lib.gh_enabled() and not SYNC_ERR:
             st.success("Las canciones se guardan solas en GitHub y no se pierden al reiniciar.")
         if lib.gh_enabled() and st.button("🔄 Recargar las canciones desde GitHub", key="resync", help="Vuelve a descargar todas las canciones guardadas en GitHub."):
-            st.session_state.sync_attempt += 1
+            sync_store(force=True)
             st.rerun()
         elif SYNC_ERR:
             st.error("No se puede guardar en GitHub: " + SYNC_ERR)
