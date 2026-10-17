@@ -390,7 +390,7 @@ function dictPanel(){
   live.textContent=dict.interim?"… "+dict.interim:(dict.last?"✔ "+dict.last:"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…");
   d.append(live);
   if(showHelp){ var h=document.createElement("p"); h.className="help";
-    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra». «Bien» deja la nota igual. «Cuatro corcheas» pone corchea a las 4 siguientes. «Añadir silencio de negra», «añadir Fa negra». «Añadir palabra can» mete esa palabra a la derecha y luego le dices su nota. «Cinco notas» pone 5 notas en la sílaba marcada y luego las dices una a una. «Octava arriba» / «octava abajo» sube o baja la nota marcada una octava («medio tono arriba/abajo» también). «Eliminar» borra lo marcado (un silencio, una nota o la sílaba entera). «Separar», «unir», «una sola nota». «Silencio de negra», «quitar silencio», «anterior», «ir a love», «deshacer», «guardar».";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra». «Bien» deja la nota igual. «Cuatro corcheas» pone corchea a las 4 siguientes. «Añadir silencio de negra», «añadir Fa negra». «Añadir palabra can» mete esa palabra a la derecha y luego le dices su nota. «Cinco notas» pone 5 notas en la sílaba marcada y luego las dices una a una. «Bemol», «sostenido» o «natural» solos cambian la nota que acabas de decir. «Octava arriba» / «octava abajo» sube o baja la nota marcada una octava («medio tono arriba/abajo» también). «Eliminar» borra lo marcado (un silencio, una nota o la sílaba entera). «Separar», «unir», «una sola nota». «Silencio de negra», «quitar silencio», «anterior», «ir a love», «deshacer», «guardar».";
     d.append(h); }
   return d;
 }
@@ -441,8 +441,23 @@ var NOTEW={"do":"Do","re":"Re","mi":"Mi","fa":"Fa","sol":"Sol","la":"La","si":"S
 function norm(t){ return String(t).toLowerCase().replace(/[áàä]/g,"a").replace(/[éè]/g,"e").replace(/[íì]/g,"i").replace(/[óò]/g,"o").replace(/[úü]/g,"u").replace(/[.,;:!¿?¡]/g," ").replace(/\s+/g," ").trim(); }
 function undoCmd(){ if(!dict.undo.length) return; var u=dict.undo.pop(); S[st.i]=u.song; selPath=u.sel; dict.last="Deshecho"; dirty=true; show(); }
 var SAVEW={guardar:1,guarda:1,guardalo:1,guardala:1,guardame:1,graba:1,grabar:1,terminar:1,termina:1,terminado:1};
+function fixAcc(w){
+  var out=[];
+  for(var i=0;i<w.length;i++){
+    var x=w[i];
+    if((x==="be"||x==="ve"||x==="b")&&w[i+1]==="mol"){ out.push("bemol"); i++; continue; }
+    if(/^(vemol|bemoll|bemoles|bemol|bmol|bemos|vemos)$/.test(x)&&(x!=="vemos"||NOTEW[w[i-1]])&&(x!=="bemos"||NOTEW[w[i-1]])){ out.push("bemol"); continue; }
+    if((x==="b"||x==="be")&&NOTEW[w[i-1]]){ out.push("bemol"); continue; }
+    if(/^(sostenido|sostenida|sostenidos|sostenidas|sostendo|sostenio)$/.test(x)){ out.push("sostenido"); continue; }
+    if(x==="#"&&NOTEW[w[i-1]]){ out.push("sostenido"); continue; }
+    if(x==="becuadro"||x==="becuadros"||x==="natural"||x==="naturales"){ out.push("natural"); continue; }
+    if(x==="mí"||x==="me"&&(DURW[w[i+1]]||w[i+1]==="bemol"||w[i+1]==="sostenido")){ out.push("mi"); continue; }
+    out.push(x);
+  }
+  return out;
+}
 function runCmd(raw){
-  var w=norm(raw).split(" ").filter(Boolean); if(!w.length) return;
+  var w=fixAcc(norm(raw).split(" ").filter(Boolean)); if(!w.length) return;
   var wantSave=w.some(function(x){ return SAVEW[x]; });
   if(wantSave){
     w=w.filter(function(x){ return !SAVEW[x]&&x!=="cambios"&&x!=="los"&&x!=="todo"; });
@@ -491,6 +506,18 @@ function shiftCmd(w){
   return (up?1:-1)*(oct?12:1);
 }
 function applyTokens(w,raw){
+  var accW=w.filter(function(x){ return x==="bemol"||x==="sostenido"||x==="natural"; });
+  if(accW.length&&w.every(function(x){ return x==="bemol"||x==="sostenido"||x==="natural"||x==="la"||x==="en"||x==="es"||x==="con"||x==="nota"||x==="ponle"||x==="pon"||x==="hazla"; })){
+    var paths0=allPaths(),tp=selPath;
+    if(lastApplied&&paths0.indexOf(lastApplied)===paths0.indexOf(selPath)-1) tp=lastApplied; // la nota que se acaba de dictar
+    var tu=unitAt(tp); if(!(tu.n||[]).length) return;
+    dict.undo.push({song:JSON.parse(JSON.stringify(S[st.i])),sel:selPath}); dirty=true;
+    var ixA=tp===selPath&&tu.n.length>1?Math.min(selNote,tu.n.length-1):(tu.n.length>1&&tp!==selPath?tu.n.length-1:0);
+    var pa=parse(tu.n[ixA]); pa.a=accW[accW.length-1]==="bemol"?"b":accW[accW.length-1]==="sostenido"?"#":"";
+    tu.n[ixA]=fmt(pa); beep(tu.n[ixA]);
+    dict.last="«"+(tu.t||"")+"»: "+tu.n[ixA];
+    return;
+  }
   var sh=shiftCmd(w);
   if(sh&&selPath&&!selRest){
     var su=unitAt(selPath); if(!(su.n||[]).length) return;
