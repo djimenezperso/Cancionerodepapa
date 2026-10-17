@@ -138,6 +138,58 @@ def side_by_side(images, song, key, editable=False):
         return viewer(song, key=f"v-{key}", editable=editable)
 
 
+def tools_panel(row, sel):
+    """Columna lateral: preparar partitura y corregir hablando."""
+    has_dur = any("d" in u for sec in row["song"].get("sections", []) for line in sec.get("lines", []) for u in line.get("units", []))
+    st.markdown('<p class="lbl">Herramientas</p>', unsafe_allow_html=True)
+    if st.button("🎼 Recalcular ritmo" if has_dur else "🎼 Preparar la partitura", key=f"rhy-{sel}", use_container_width=True,
+                 help="La IA propone cuánto dura cada nota a partir de los números de tiempo y de la canción."):
+        if not KEY:
+            st.error("La app no tiene clave de IA configurada.")
+        else:
+            with st.spinner("Calculando el ritmo…"):
+                try:
+                    row["song"] = lib.estimate_rhythm(row["song"], KEY, MODEL, PROVIDER)
+                    _, err = safe(lib.save_song, row, sel)
+                    flash("warning" if err else "success", ("Guardado aquí, pero no en GitHub: " + err) if err else "Ritmo calculado. Mira la «🎼 Partitura».")
+                    st.rerun()
+                except lib.ReadError as e:
+                    st.error(str(e))
+    st.markdown("**🎤 Corregir hablando**")
+    st.caption("Frases largas, por ejemplo: «en “so”, redonda ligada a negra con puntillo; la primera nota es Fa, no La». Para ir nota a nota, usa «🎤 Dictar» en la canción.")
+    if PROVIDER != "openai":
+        st.info("Necesita la clave de OpenAI (OPENAI_API_KEY) en Secrets.")
+        return
+    rec = st.audio_input("Grabar", key=f"rec-{sel}", label_visibility="collapsed") if hasattr(st, "audio_input") else st.file_uploader("Nota de voz", type=["wav", "mp3", "m4a", "ogg", "webm"], key=f"rec-{sel}")
+    vk = f"voice-{sel}"
+    if rec is not None and st.button("🪄 Entender", type="primary", key=f"vgo-{sel}", use_container_width=True):
+        with st.spinner("Escuchando…"):
+            try:
+                said = lib.transcribe_voice(rec.getvalue(), KEY, getattr(rec, "name", None) or "voz.wav")
+                new_song, summary, missing = lib.voice_changes(row["song"], said, KEY, MODEL, PROVIDER)
+                st.session_state[vk] = {"said": said, "song": new_song, "summary": summary, "missing": missing}
+            except lib.ReadError as e:
+                st.error(str(e))
+    prop = st.session_state.get(vk)
+    if prop:
+        st.markdown(f"**He oído:** «{prop['said']}»")
+        if prop["summary"]:
+            st.markdown("\n".join(f"- {x}" for x in prop["summary"]))
+        else:
+            st.warning("No he encontrado nada que cambiar.")
+        if prop["missing"]:
+            st.warning("No he podido aplicar: " + prop["missing"])
+        if st.button("✅ Aceptar cambios", type="primary", use_container_width=True, key=f"vok-{sel}", disabled=not prop["summary"]):
+            row["song"] = prop["song"]
+            _, err = safe(lib.save_song, row, sel)
+            st.session_state.pop(vk, None)
+            flash("warning" if err else "success", ("Guardado aquí, pero no en GitHub: " + err) if err else "Cambios guardados.")
+            st.rerun()
+        if st.button("Descartar", use_container_width=True, key=f"vno-{sel}"):
+            st.session_state.pop(vk, None)
+            st.rerun()
+
+
 # --------------------------------------------------------------------------- revisión antes de guardar
 
 pend = st.session_state.pending
@@ -200,14 +252,22 @@ with tab_saved:
         if row.get("song"):
             compare = bool(photos) and st.toggle("📄 Ver la hoja original al lado", value=False, key=f"cmp-{sel}")
             if compare:
-                edited = side_by_side(photos, row["song"], sel, editable=True)
+                c_photo, c_view, c_tools = st.columns([1, 1.35, 0.75], gap="medium")
+                with c_photo:
+                    st.markdown('<p class="lbl">Hoja original</p>', unsafe_allow_html=True)
+                    for im in photos:
+                        st.image(im, use_container_width=True)
             else:
+                c_view, c_tools = st.columns([2.4, 0.8], gap="medium")
+            with c_view:
                 edited = viewer(row["song"], key=f"v-{sel}", editable=True)
             if edited:
                 row["song"], row["title"], row["page"] = edited, edited["title"], edited.get("page", "")
                 _, err = safe(lib.save_song, row, sel)
                 flash("warning" if err else "success", ("Guardado aquí, pero no en GitHub: " + err) if err else "Cambios guardados.")
                 st.rerun()
+            with c_tools:
+                tools_panel(row, sel)
         else:
             st.info("Esta hoja aún no está pasada a limpio.")
             if st.button("✨ Pasar a limpio esta hoja", type="primary", use_container_width=True, disabled=not photos, key=f"read-{sel}"):
@@ -218,57 +278,8 @@ with tab_saved:
             for im in photos:
                 st.image(im, use_container_width=True)
 
+
         if row.get("song"):
-            has_dur = any("d" in u for sec in row["song"].get("sections", []) for line in sec.get("lines", []) for u in line.get("units", []))
-            if st.button("🎼 Volver a calcular el ritmo de la partitura" if has_dur else "🎼 Preparar la partitura", key=f"rhy-{sel}", help="La IA propone cuánto dura cada nota a partir de los números de tiempo y de la canción."):
-                if not KEY:
-                    st.error("La app no tiene clave de IA configurada.")
-                else:
-                    with st.spinner("Calculando el ritmo…"):
-                        try:
-                            row["song"] = lib.estimate_rhythm(row["song"], KEY, MODEL, PROVIDER)
-                            _, err = safe(lib.save_song, row, sel)
-                            flash("warning" if err else "success", ("Guardado aquí, pero no en GitHub: " + err) if err else "Listo. Pulsa «🎼 Partitura» en la canción para verla. Si alguna nota dura mal, cámbiala en «Corregir» → «Duración».")
-                            st.rerun()
-                        except lib.ReadError as e:
-                            st.error(str(e))
-
-            with st.expander("🎤 Corregir hablando"):
-                st.write("Graba lo que quieres cambiar, por ejemplo: *«en "
-                         "“so”, redonda ligada a negra con puntillo; “love” es una negra; la primera nota es Fa, no La»*.")
-                if PROVIDER != "openai":
-                    st.info("Esta función necesita la clave de OpenAI (OPENAI_API_KEY) en Secrets.")
-                else:
-                    rec = st.audio_input("Pulsa el micrófono para grabar", key=f"rec-{sel}") if hasattr(st, "audio_input") else st.file_uploader("Sube una nota de voz", type=["wav", "mp3", "m4a", "ogg", "webm"], key=f"rec-{sel}")
-                    vk = f"voice-{sel}"
-                    if rec is not None and st.button("🪄 Entender y proponer cambios", type="primary", key=f"vgo-{sel}"):
-                        with st.spinner("Escuchando…"):
-                            try:
-                                said = lib.transcribe_voice(rec.getvalue(), KEY, getattr(rec, "name", None) or "voz.wav")
-                                new_song, summary, missing = lib.voice_changes(row["song"], said, KEY, MODEL, PROVIDER)
-                                st.session_state[vk] = {"said": said, "song": new_song, "summary": summary, "missing": missing}
-                            except lib.ReadError as e:
-                                st.error(str(e))
-                    prop = st.session_state.get(vk)
-                    if prop:
-                        st.markdown(f"**He oído:** «{prop['said']}»")
-                        if prop["summary"]:
-                            st.markdown("**Cambios que voy a hacer:**\n" + "\n".join(f"- {x}" for x in prop["summary"]))
-                        else:
-                            st.warning("No he encontrado nada que cambiar.")
-                        if prop["missing"]:
-                            st.warning("No he podido aplicar: " + prop["missing"])
-                        c1, c2 = st.columns(2)
-                        if c1.button("✅ Aceptar cambios", type="primary", use_container_width=True, key=f"vok-{sel}", disabled=not prop["summary"]):
-                            row["song"] = prop["song"]
-                            _, err = safe(lib.save_song, row, sel)
-                            st.session_state.pop(vk, None)
-                            flash("warning" if err else "success", ("Guardado aquí, pero no en GitHub: " + err) if err else "Cambios guardados.")
-                            st.rerun()
-                        if c2.button("Descartar", use_container_width=True, key=f"vno-{sel}"):
-                            st.session_state.pop(vk, None)
-                            st.rerun()
-
             with st.expander("✏️ Corregir notas, tiempos y apuntes"):
                 song = row["song"]
                 if photos and st.checkbox("Mostrar la hoja original mientras corrijo", key=f"edph-{sel}"):
