@@ -53,9 +53,9 @@ function build(song,k){
     }
     if(e.s>cur) pieces.push({rest:true,s:cur,d:e.s-cur,owner:lastPath});
     lastPath=e.path;
-    var n=e.notes.length,len=e.e-e.s,each=Math.max(1,Math.floor(len/n)),t=e.s;
+    var n=e.notes.length,len=e.e-e.s,each=Math.max(1,Math.floor(len/n)),t=e.s,nd=e.u.nd&&e.u.nd.length===n?e.u.nd:null,ndSum=nd?nd.reduce(function(a,x){return a+x;},0):0;
     e.notes.forEach(function(nt,ix){
-      var d=ix===n-1?e.e-t:each;
+      var d=ix===n-1?e.e-t:(nd?Math.max(1,Math.round(nd[ix]*len/ndSum)):each);
       pieces.push({rest:false,s:t,d:d,note:nt,lyric:ix===0?(e.u.t||""):null,mel:ix>0,cues:ix===0?e.cues:[],path:e.path,mark:!!e.u.mark,pause:ix===n-1&&!!e.u.pause});
       t+=d;
     });
