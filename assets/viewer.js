@@ -86,21 +86,16 @@ function list(){
   root.appendChild(ul);
 }
 function show(){
-  pl.stop(); savePrefs(); var s=S[st.i]; var keepScroll=root.scrollTop; root.replaceChildren(); document.documentElement.style.setProperty("--size",st.size+"px");
+  savePrefs(); var s=S[st.i]; var keepScroll=root.scrollTop; root.replaceChildren(); document.documentElement.style.setProperty("--size",st.size+"px");
   var wide=root.clientWidth>=760; lastWide=wide;
   var lay=document.createElement("div"); lay.className="lay"+(wide?" wide":""); var main=document.createElement("div"),side=document.createElement("div"); side.className="side";
   var panel=side; // en estrecho, los paneles van abajo y fijos
   if(wide){ lay.append(main,side); } else { var bottom=document.createElement("div"); bottom.className="bottom"; lay.append(side,main,bottom); panel=bottom; }
   root.appendChild(lay);
   var bar=document.createElement("div"); bar.className="rbar";
-  var pb=b("▶ Escuchar",function(){
-    if(pl.playing){ pl.stop(); return; }
-    if(pl.play(s,{tempo:st.bpm,transpose:st.k,click:st.click,melody:st.mel,onTick:tick,onEnd:function(){ pb.textContent="▶ Escuchar"; if(window.__kb) window.__kb.textContent="🎹 Piano"; tick(null); }})) pb.textContent="■ Parar";
-  },"pri");
-  var kb=b("🎹 Piano",function(){
-    if(pl.playing){ pl.stop(); return; }
-    if(pl.play(s,{tempo:st.bpm,transpose:st.k,click:st.click,melody:true,piano:true,onTick:tick,onEnd:function(){ kb.textContent="🎹 Piano"; pb.textContent="▶ Escuchar"; tick(null); }})) kb.textContent="■ Parar";
-  },"pri");
+  // 🎹 Piano y 🥁 Metrónomo se encienden y apagan; si alguno está encendido, suena
+  var kb=b(play.piano?"🎹 Piano ■":"🎹 Piano",function(){ play.piano=!play.piano; restartPlay(s); show(); },play.piano?"pri":"");
+  var mb=b(play.click?"🥁 Metrónomo ■":"🥁 Metrónomo",function(){ play.click=!play.click; restartPlay(s); show(); },play.click?"pri":"");
   if(S.length>1) bar.append(b("← Lista",list));
   bar.append(b(st.score?"📝 Como en la hoja":"🎼 Partitura",function(){ st.score=!st.score; show(); },"sw"));
   if(window.EDITABLE) bar.append(b(st.edit?(dirty?"✏️ Terminar y guardar":"✏️ Terminar"):"✏️ Cambiar notas",function(){
@@ -109,10 +104,10 @@ function show(){
   if(window.EDITABLE&&SR) bar.append(b(dict.on?"⏹ Parar dictado":"🎤 Dictar",function(){ if(dict.on) stopDict(); else startDict(); show(); },dict.on?"ok":""));
   if(dirty){ bar.append(b("💾 Guardar cambios",save,"ok"),b("Deshacer",function(){ S=JSON.parse(JSON.stringify(window.SONGS)); dirty=false; selPath=null; show(); })); }
   function grp(){ var g=document.createElement("div"); g.className="grp"; for(var i=0;i<arguments.length;i++) g.appendChild(arguments[i]); return g; }
-  window.__kb=kb;
-  bar.append(pb,kb,grp(sp("♩=","lbl"),b("−",function(){st.bpm=Math.max(30,st.bpm-4);show();},"","Más lento"),sp(st.bpm),b("+",function(){st.bpm=Math.min(240,st.bpm+4);show();},"","Más rápido")),
-    grp(b("Metrónomo",function(){st.click=!st.click;show();},st.click?"":"off"),b("Melodía",function(){st.mel=!st.mel;show();},st.mel?"":"off")),
-    grp(sp("Tono","lbl"),b("−",function(){st.k=Math.max(-12,st.k-1);show();},"","Bajar medio tono"),sp((st.k>0?"+":"")+st.k),b("+",function(){st.k=Math.min(12,st.k+1);show();},"","Subir medio tono")),
+  bar.append(kb,mb,grp(sp("♩=","lbl"),b("−",function(){st.bpm=Math.max(30,st.bpm-4);restartPlay(s);show();},"","Más lento"),sp(st.bpm),b("+",function(){st.bpm=Math.min(240,st.bpm+4);restartPlay(s);show();},"","Más rápido")),
+    grp(sp("Tono","lbl"),b("−",function(){st.k=Math.max(-12,st.k-1);restartPlay(s);show();},"","Bajar medio tono toda la partitura"),sp((st.k>0?"+":"")+st.k),b("+",function(){st.k=Math.min(12,st.k+1);restartPlay(s);show();},"","Subir medio tono toda la partitura")));
+  if(st.k&&window.EDITABLE) bar.append(b("Guardar en este tono",function(){ transposeAll(st.k); st.k=0; changed(); },"ok"));
+  bar.append(
     grp(b("A−",function(){st.size=Math.max(14,st.size-2);show();},"","Letra más pequeña"),b("A+",function(){st.size=Math.min(40,st.size+2);show();},"","Letra más grande")));
   side.appendChild(bar);
   if(dict.err){ var er=document.createElement("p"); er.className="hint"; er.textContent=dict.err; side.appendChild(er); dict.err=""; }
@@ -164,6 +159,8 @@ function editor(s){
   var top=document.createElement("div"); top.className="r";
   top.append(sp("«"+(u.t||"")+"»","t"));
   u.n.forEach(function(n,i){ top.append(b(n,function(){ selNote=i; show(); },"nchip"+(i===selNote?" on":""))); });
+  top.append(b("✂ Separar",function(){ if(splitUnit(selPath)){ selPaths=[selPath]; changed(); } },"","Separar la palabra en sílabas, una nota en cada una"),
+    b("Unir ▶",function(){ if(joinUnit(selPath)) changed(); },"","Unir con la sílaba siguiente"));
   top.append(b("+",function(){ u.n.push(u.n.length?u.n[u.n.length-1]:"Do"); selNote=u.n.length-1; changed(); },"","Añadir nota a esta sílaba"));
   if(u.n.length>1) top.append(b("−",function(){ u.n.splice(selNote,1); selNote=0; changed(); },"","Quitar esta nota"));
   var bsel=document.createElement("select"); bsel.setAttribute("aria-label","Tiempo"); bsel.append(new Option("T: —",""));
@@ -232,6 +229,54 @@ function move(dir){
   var i=all.indexOf(selPath)+dir; if(i>=0&&i<all.length){ selPath=all[i]; selPaths=[selPath]; selNote=0; show(); }
 }
 function changed(){ dirty=true; show(); }
+var play=window.__vplay||(window.__vplay={piano:false,click:false});
+function restartPlay(s){
+  pl.__stopping=true; pl.stop(); pl.__stopping=false; tick(null);
+  if(!play.piano&&!play.click) return;
+  pl.play(s,{tempo:st.bpm,transpose:st.k,click:play.click,melody:play.piano,piano:true,onTick:tick,
+    onEnd:function(){ if(pl.__stopping) return; play.piano=false; play.click=false; tick(null); show(); }});
+}
+function transposeAll(k){
+  allPaths().forEach(function(p){ var u=unitAt(p); u.n=(u.n||[]).map(function(n){ var q=parse(n); return fmt(fromMidi(midiOf(q)+k,k>0)); }); });
+}
+/* separar una palabra en sílabas (una por nota) y unir sílabas */
+function syllables(word,n){
+  var w=String(word||""),V=/[aeiouyáéíóúü]/i,idx=[],parts=[];
+  for(var i=0;i<w.length;i++){ if(V.test(w[i])&&(i===0||!V.test(w[i-1]))) idx.push(i); }
+  if(idx.length<2) return null;
+  var cuts=[];
+  for(var g=1;g<idx.length;g++){
+    var endPrev=idx[g-1]; while(endPrev+1<w.length&&V.test(w[endPrev+1])) endPrev++;
+    var cons=w.slice(endPrev+1,idx[g]),c=endPrev+1;
+    if(cons.length===1) c=endPrev+1;
+    else if(cons.length>=2){ var last2=cons.slice(-2).toLowerCase(); c=idx[g]-(/^[bcdfgkpt][lr]$/.test(last2)||last2==="ch"||last2==="ll"||last2==="rr"?2:1); }
+    cuts.push(c);
+  }
+  // nos quedamos con tantas sílabas como notas, cortando por los primeros huecos
+  cuts=cuts.slice(0,Math.max(1,n-1));
+  var prev=0; cuts.forEach(function(c){ parts.push(w.slice(prev,c)); prev=c; }); parts.push(w.slice(prev));
+  return parts.filter(function(x){return x;});
+}
+function splitUnit(path){
+  var a=path.split(".").map(Number),line=S[st.i].sections[a[0]].lines[a[1]],u=line.units[a[2]],notes=(u.n||[]).slice();
+  var n=Math.max(2,notes.length),parts=syllables((u.t||"").replace(/-$/,""),n);
+  if(!parts||parts.length<2) return false;
+  var trail=/-$/.test(u.t||"");
+  var news=parts.map(function(t,i){ var nu={t:t+(i<parts.length-1||trail?"-":""),n:[notes[i]||notes[notes.length-1]||"Do"]}; return nu; });
+  news[0].b=u.b; if(!news[0].b) delete news[0].b;
+  if(u.d){ var each=Math.round(u.d/news.length*4)/4||0.5; news.forEach(function(x){ x.d=each; }); }
+  if(u.mark) news.forEach(function(x){ x.mark=true; });
+  if(u.r) news[news.length-1].r=u.r; if(u.pause) news[news.length-1].pause=true;
+  line.units.splice.apply(line.units,[a[2],1].concat(news));
+  return news.length;
+}
+function joinUnit(path){
+  var a=path.split(".").map(Number),line=S[st.i].sections[a[0]].lines[a[1]],u=line.units[a[2]],nx=line.units[a[2]+1];
+  if(!nx) return false;
+  u.t=(u.t||"").replace(/-$/,"")+(nx.t||""); u.n=(u.n||[]).concat(nx.n||[]);
+  if(u.d||nx.d) u.d=(u.d||0)+(nx.d||0); if(nx.r) u.r=nx.r; if(nx.pause) u.pause=true;
+  line.units.splice(a[2]+1,1); return true;
+}
 
 /* ---------- dictado en directo (reconocimiento de voz del navegador) ---------- */
 var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -262,7 +307,7 @@ function dictPanel(){
   var live=document.createElement("p"); live.id="dict-live"; live.className="live"; live.textContent=dict.interim?"… "+dict.interim:(dict.last?"":"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…"); d.append(live);
   if(dict.last){ var la=document.createElement("p"); la.className="done"; la.textContent="✔ "+dict.last; d.append(la); }
   if(showHelp){ var h=document.createElement("p"); h.className="help";
-    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». «Bien» deja la nota igual y pasa a la siguiente. «Guardar» guarda los cambios. Silencios: «silencio de negra» (va detrás de la nota que acabas de decir), «Fa negra, silencio de corchea», «quitar silencio». Otras: «anterior», «ir a love», «tiempo uno», «deshacer».";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». «Bien» deja la nota igual y pasa a la siguiente. «Separar» parte la palabra en sílabas (una nota en cada una) y «unir» la junta con la siguiente. «Cuatro corcheas» pone corchea a las 4 siguientes («tres bien» salta tres). «Guardar» guarda los cambios. Silencios: «silencio de negra» (va detrás de la nota que acabas de decir), «Fa negra, silencio de corchea», «quitar silencio». Otras: «anterior», «ir a love», «tiempo uno», «deshacer».";
     d.append(h); }
   return d;
 }
@@ -283,17 +328,34 @@ function runCmd(raw){
     if(dirty){ dict.last="Guardando…"; save(); } else { dict.last="No hay cambios que guardar"; show(); }
     return;
   }
+  // «cuatro corcheas» → cuatro órdenes «igual corchea»; «tres bien» → tres «bien»
+  var ex=[],multiMsg="";
+  for(var q=0;q<w.length;q++){
+    var nw=w[q],cnt=NUMW[nw]||(/^\d{1,2}$/.test(nw)?parseInt(nw,10):0),prevW=w[q-1]||"";
+    var afterNote=!!NOTEW[prevW]||prevW==="tiempo"||prevW==="octava"||prevW==="sostenido"||prevW==="bemol";
+    if(cnt>1&&cnt<=32&&!afterNote&&(DURW[w[q+1]]||OKW[w[q+1]])){
+      if(OKW[w[q+1]]){ for(var c1=0;c1<cnt;c1++) ex.push("bien"); q+=1; continue; }
+      var dt=[w[q+1]],j2=q+2;
+      if(w[j2]==="con"&&w[j2+1]==="puntillo"){ dt.push("con","puntillo"); j2+=2; } else if(w[j2]==="puntillo"){ dt.push("puntillo"); j2++; }
+      for(var c2=0;c2<cnt;c2++) ex.push("igual",...dt);
+      multiMsg=cnt+" notas → "+dt.join(" ").replace(/s\b/g,"");
+      q=j2-1; continue;
+    }
+    ex.push(nw);
+  }
+  w=ex;
   // trocear en órdenes: tras una figura, una nota nueva (o «igual») empieza la sílaba siguiente
   var segs=[],cur=[],seenDur=false;
   for(var i=0;i<w.length;i++){
     var x=w[i],isNote=!!NOTEW[x]||/^(do|re|mi|fa|sol|la|si)(#|b)?([1-7])?$/.test(x)||x==="igual"||x==="misma"||x==="mismo";
-    if(OKW[x]){ if(cur.length) segs.push(cur); segs.push([x]); cur=[]; seenDur=false; continue; }
+    if(OKW[x]||/^(separar|separa|dividir|divide|partir|parte|unir|une|junta|juntar)$/.test(x)){ if(cur.length) segs.push(cur); segs.push([x]); cur=[]; seenDur=false; continue; }
     if(x==="esta"&&OKW[w[i+1]]) continue; // «está bien»
     if(seenDur&&isNote&&w[i-1]!=="silencio"&&w[i-1]!=="de"){ segs.push(cur); cur=[]; seenDur=false; }
     cur.push(x); if(DURW[x]) seenDur=true;
   }
   if(cur.length) segs.push(cur);
   for(var k=0;k<segs.length;k++){ if(applyTokens(segs[k],segs.length>1?segs[k].join(" "):raw)===false) break; }
+  if(multiMsg) dict.last=multiMsg;
   show();
 }
 function applyTokens(w,raw){
@@ -303,6 +365,8 @@ function applyTokens(w,raw){
   for(var i=0;i<w.length;i++){
     var x=w[i];
     if(x==="deshacer"||x==="deshaz"){ undoCmd(); return false; }
+    if(x==="separar"||x==="separa"||x==="dividir"||x==="divide"||x==="partir"||x==="parte"){ var pre=JSON.parse(JSON.stringify(s)),ns=splitUnit(selPath); if(ns){ dict.undo.push({song:pre,sel:selPath}); dirty=true; dict.last="Separada en "+ns+" sílabas"; } else dict.last="No sé separar «"+(unitAt(selPath).t||"")+"»"; return; }
+    if(x==="unir"||x==="une"||x==="junta"||x==="juntar"){ var pre2=JSON.parse(JSON.stringify(s)); if(joinUnit(selPath)){ dict.undo.push({song:pre2,sel:selPath}); dirty=true; dict.last="Unida con la siguiente"; } return; }
     if(OKW[x]||x==="adelante"){ nav=1; continue; }
     if((x==="quitar"||x==="borrar")&&(w[i+1]==="silencio"||(w[i+1]==="el"&&w[i+2]==="silencio"))){ rest=0; i+=w[i+1]==="el"?2:1; continue; }
     if(x==="anterior"||x==="atras"||x==="volver"){ nav=-1; continue; }
