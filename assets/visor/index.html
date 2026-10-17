@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Kalam:wght@400;700&display=swap">
+<style id="core-css"></style>
+</head><body><div id="app"></div>
+<script>
+/* Visor de canciones como componente de Streamlit: muestra la canción y devuelve los cambios de notas. */
+function send(type,data){ window.parent.postMessage(Object.assign({isStreamlitMessage:true,type:type},data||{}),"*"); }
+var lastH=0;
+function maxH(){ var v=800; try{ v=window.parent.innerHeight||v; }catch(e){ v=screen.availHeight||v; } return Math.max(480,Math.min(1200,v-110)); }
+function height(){ var h=maxH(); if(Math.abs(h-lastH)>2){ lastH=h; send("streamlit:setFrameHeight",{height:h}); } }
+window.addEventListener("resize",height);
+var loaded=false,lastSong=null;
+window.addEventListener("message",function(ev){
+  var d=ev.data||{}; if(d.type!=="streamlit:render") return;
+  var a=d.args||{};
+  if(a.song===lastSong) return;
+  lastSong=a.song;
+  window.SONGS=[JSON.parse(a.song)]; window.EMBEDDED=true; window.EDITABLE=!!a.editable;
+  window.onSongEdit=function(song){ send("streamlit:setComponentValue",{value:{nonce:Date.now(),song:song},dataType:"json"}); };
+  if(!loaded){
+    loaded=true;
+    document.getElementById("core-css").textContent=a.css||"";
+    var s=document.createElement("script"); s.textContent=a.js||""; document.body.appendChild(s);
+  } else if(window.__viewerStart){ window.__viewerStart(); }
+  setTimeout(height,50);
+});
+send("streamlit:componentReady",{apiVersion:1});
+</script>
+</body></html>
