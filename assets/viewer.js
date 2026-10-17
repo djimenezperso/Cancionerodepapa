@@ -103,7 +103,9 @@ function show(){
   },"pri");
   if(S.length>1) bar.append(b("← Lista",list));
   bar.append(b(st.score?"📝 Como en la hoja":"🎼 Partitura",function(){ st.score=!st.score; show(); },"sw"));
-  if(window.EDITABLE) bar.append(b(st.edit?"✏️ Terminar":"✏️ Cambiar notas",function(){ st.edit=!st.edit; selPath=null; if(!st.edit) stopDict(); show(); },st.edit?"edon":""));
+  if(window.EDITABLE) bar.append(b(st.edit?(dirty?"✏️ Terminar y guardar":"✏️ Terminar"):"✏️ Cambiar notas",function(){
+    if(st.edit&&dirty){ save(); return; }
+    st.edit=!st.edit; selPath=null; selPaths=[]; if(!st.edit) stopDict(); show(); },st.edit?"edon":""));
   if(window.EDITABLE&&SR) bar.append(b(dict.on?"⏹ Parar dictado":"🎤 Dictar",function(){ if(dict.on) stopDict(); else startDict(); show(); },dict.on?"ok":""));
   if(dirty){ bar.append(b("💾 Guardar cambios",save,"ok"),b("Deshacer",function(){ S=JSON.parse(JSON.stringify(window.SONGS)); dirty=false; selPath=null; show(); })); }
   function grp(){ var g=document.createElement("div"); g.className="grp"; for(var i=0;i<arguments.length;i++) g.appendChild(arguments[i]); return g; }
