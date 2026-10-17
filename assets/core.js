@@ -29,14 +29,16 @@ window.CORE=(function(){
     var out=[];(song.sections||[]).forEach(function(s,si){(s.lines||[]).forEach(function(l,li){(l.units||[]).forEach(function(u,ui){out.push({u:u,path:si+"."+li+"."+ui});});});});
     return out;
   }
-  function timeline(song){
+  function timeline(song,noDur){
     var M=beatsPerBar(song.ts),f=flatten(song),n=f.length,st=new Array(n).fill(null),heldEnd=new Array(n).fill(null),last=null,any=false;
     var hasPos=f.some(function(x){return typeof x.u.pos==="number";});
-    var hasDur=!hasPos&&f.some(function(x){return typeof x.u.d==="number"&&x.u.d>0;});
+    var hasDur=!noDur&&!hasPos&&f.some(function(x){return typeof x.u.d==="number"&&x.u.d>0;});
     if(hasDur){
-      // duraciones: posiciones seguidas y se encaja el primer número de tiempo de la hoja (anacrusa)
-      var t=0,durEnd=new Array(n);
-      for(var di=0;di<n;di++){ var dd=(typeof f[di].u.d==="number"&&f[di].u.d>0)?f[di].u.d:1; st[di]=t; durEnd[di]=t+dd; t+=dd+((typeof f[di].u.r==="number"&&f[di].u.r>0)?f[di].u.r:0); }
+      // duraciones: posiciones seguidas y se encaja el primer número de tiempo de la hoja (anacrusa).
+      // Las sílabas sin duración usan la que sale de los números de tiempo.
+      var base=timeline(song,true).items,t=0,durEnd=new Array(n);
+      for(var di=0;di<n;di++){ var bd=di+1<n?base[di+1].start-base[di].start:base[di].end-base[di].start; if(!(bd>0)) bd=1;
+        var dd=(typeof f[di].u.d==="number"&&f[di].u.d>0)?f[di].u.d:Math.round(bd*4)/4||1; st[di]=t; durEnd[di]=t+dd; t+=dd+((typeof f[di].u.r==="number"&&f[di].u.r>0)?f[di].u.r:0); }
       var shift=0; for(var fi=0;fi<n;fi++){ var fb=+f[fi].u.b; if(fb>=1&&fb<=M){ shift=(((fb-1-st[fi])%M)+M)%M; break; } }
       var itemsD=[];
       for(var xi=0;xi<n;xi++) itemsD.push({path:f[xi].path,start:st[xi]+shift,end:durEnd[xi]+shift,notes:(f[xi].u.n||[])});
