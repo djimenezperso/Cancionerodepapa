@@ -74,10 +74,19 @@ def show_flash():
         st.session_state.flash = None
 
 
-def viewer(song, height=None):
-    lines = sum(len(s.get("lines", [])) for s in song.get("sections", []))
-    h = height or min(2600, 280 + lines * 160 + (70 if song.get("general") else 0))
-    components.html(lib.viewer_html([song]), height=h, scrolling=True)
+visor_component = components.declare_component("visor", path=str(lib.ASSETS / "visor"))
+
+
+def viewer(song, key="v", editable=False):
+    """Muestra la canción. Si editable, devuelve la canción cambiada cuando se pulsa «Guardar cambios»."""
+    import json as _json
+
+    css, js = lib.visor_assets()
+    res = visor_component(song=_json.dumps(song, ensure_ascii=False), css=css, js=js, editable=editable, key=key, default=None)
+    if editable and res and res.get("nonce") and st.session_state.get(f"done-{key}") != res["nonce"]:
+        st.session_state[f"done-{key}"] = res["nonce"]
+        return lib.normalize(res.get("song"))
+    return None
 
 
 def label(row):
@@ -112,7 +121,7 @@ def transcribe(images, title_hint=""):
     return None
 
 
-def side_by_side(images, song, key):
+def side_by_side(images, song, key, editable=False):
     """Hoja original a la izquierda, versión limpia a la derecha (en el móvil, una debajo de otra)."""
     c1, c2 = st.columns([1, 1.25], gap="medium")
     with c1:
@@ -121,7 +130,7 @@ def side_by_side(images, song, key):
             st.image(im, use_container_width=True)
     with c2:
         st.markdown('<p class="lbl">Pasada a limpio</p>', unsafe_allow_html=True)
-        viewer(song)
+        return viewer(song, key=f"v-{key}", editable=editable)
 
 
 # --------------------------------------------------------------------------- revisión antes de guardar
@@ -132,7 +141,10 @@ if pend:
     st.write("Compara la hoja con la versión limpia. Si está bien, pulsa **Aceptar**. Si hay algún fallo pequeño, acéptala y luego corrígelo en «Corregir».")
     if pend.get("doubts"):
         st.warning("Cosas que no se leían bien: " + " · ".join(pend["doubts"]))
-    side_by_side(pend["images"], pend["song"], "pend")
+    edited = side_by_side(pend["images"], pend["song"], "pend", editable=True)
+    if edited:
+        pend["song"] = edited
+        st.rerun()
     b1, b2, b3 = st.columns(3)
     if b1.button("✅ Aceptar y guardar", type="primary", use_container_width=True, key="pend-ok"):
         song = pend["song"]
@@ -183,9 +195,14 @@ with tab_saved:
         if row.get("song"):
             compare = bool(photos) and st.toggle("📄 Ver la hoja original al lado", value=False, key=f"cmp-{sel}")
             if compare:
-                side_by_side(photos, row["song"], sel)
+                edited = side_by_side(photos, row["song"], sel, editable=True)
             else:
-                viewer(row["song"])
+                edited = viewer(row["song"], key=f"v-{sel}", editable=True)
+            if edited:
+                row["song"], row["title"], row["page"] = edited, edited["title"], edited.get("page", "")
+                _, err = safe(lib.save_song, row, sel)
+                flash("warning" if err else "success", ("Guardado aquí, pero no en GitHub: " + err) if err else "Cambios guardados.")
+                st.rerun()
         else:
             st.info("Esta hoja aún no está pasada a limpio.")
             if st.button("✨ Pasar a limpio esta hoja", type="primary", use_container_width=True, disabled=not photos, key=f"read-{sel}"):
@@ -197,25 +214,19 @@ with tab_saved:
                 st.image(im, use_container_width=True)
 
         if row.get("song"):
-            with st.expander("🥁 Marcar el ritmo (con la canción o cantando)"):
-                st.write("Sube la canción en MP3 o vídeo si la tienes (no se guarda, solo se usa ahora). Si no, se hace cantando con el metrónomo.")
-                aud = st.file_uploader("Canción (opcional)", type=list(AUDIO_TYPES), key=f"aud-{sel}")
-                import base64
-                audio_url = ""
-                if aud is not None:
-                    if aud.size > 40 * 1024 * 1024:
-                        st.error("El archivo es muy grande (más de 40 MB). Usa el MP3 en lugar del vídeo.")
-                    else:
-                        ext = aud.name.rsplit(".", 1)[-1].lower()
-                        audio_url = f"data:{AUDIO_TYPES.get(ext, 'audio/mpeg')};base64," + base64.b64encode(aud.getvalue()).decode()
-                import json as _json
-                res = ritmo_component(song=_json.dumps(row["song"], ensure_ascii=False), audio=audio_url, key=f"ritmo-{sel}", default=None)
-                if res and res.get("nonce") and st.session_state.get(f"rit-done-{sel}") != res["nonce"]:
-                    st.session_state[f"rit-done-{sel}"] = res["nonce"]
-                    row["song"] = lib.apply_rhythm(row["song"], res)
-                    _, err = safe(lib.save_song, row, sel)
-                    flash("warning" if err else "success", ("Ritmo guardado aquí, pero no en GitHub: " + err) if err else "Ritmo guardado. Mira la partitura con «🎼 Partitura».")
-                    st.rerun()
+            has_dur = any("d" in u for sec in row["song"].get("sections", []) for line in sec.get("lines", []) for u in line.get("units", []))
+            if st.button("🎼 Volver a calcular el ritmo de la partitura" if has_dur else "🎼 Preparar la partitura", key=f"rhy-{sel}", help="La IA propone cuánto dura cada nota a partir de los números de tiempo y de la canción."):
+                if not KEY:
+                    st.error("La app no tiene clave de IA configurada.")
+                else:
+                    with st.spinner("Calculando el ritmo…"):
+                        try:
+                            row["song"] = lib.estimate_rhythm(row["song"], KEY, MODEL, PROVIDER)
+                            _, err = safe(lib.save_song, row, sel)
+                            flash("warning" if err else "success", ("Guardado aquí, pero no en GitHub: " + err) if err else "Listo. Pulsa «🎼 Partitura» en la canción para verla. Si alguna nota dura mal, cámbiala en «Corregir» → «Duración».")
+                            st.rerun()
+                        except lib.ReadError as e:
+                            st.error(str(e))
 
             with st.expander("✏️ Corregir notas, tiempos y apuntes"):
                 song = row["song"]
@@ -230,9 +241,9 @@ with tab_saved:
                 general = st.text_area("Apuntes generales (uno por línea)", "\n".join(song.get("general", [])), key=f"g-{sel}")
                 units, lines = lib.song_to_rows(song)
                 m = lib.beats_per_bar(ts)
-                st.caption("Cada fila es una sílaba o palabra. «Tiempo» es el número de colores; «Hasta» es el tiempo donde termina si la nota se aguanta (el «4-1»). Para añadir una fila, usa la última línea vacía.")
+                st.caption("Cada fila es una sílaba o palabra. «Tiempo» es el número de colores; «Hasta» es el tiempo donde termina si la nota se aguanta (el «4-1»). «Duración» y «Silencio» sirven para la partitura. Para añadir una fila, usa la última línea vacía.")
                 eu = st.data_editor(
-                    pd.DataFrame(units, columns=["verso", "sílaba", "notas", "tiempo", "hasta", "amarillo", "subrayado", "pausa", "círculo", "inicio", "fin"]),
+                    pd.DataFrame(units, columns=["verso", "sílaba", "notas", "tiempo", "hasta", "duración", "silencio", "amarillo", "subrayado", "pausa", "círculo"]),
                     num_rows="dynamic", use_container_width=True, hide_index=True, key=f"u-{sel}",
                     column_config={
                         "verso": st.column_config.NumberColumn("Verso", min_value=1, step=1, width="small"),
@@ -244,8 +255,8 @@ with tab_saved:
                         "subrayado": st.column_config.CheckboxColumn("Flecha", width="small"),
                         "pausa": st.column_config.CheckboxColumn("Punto", width="small"),
                         "círculo": st.column_config.TextColumn("Círculo", width="small"),
-                        "inicio": st.column_config.NumberColumn("Inicio", step=0.25, width="small", help="Pulso exacto donde empieza (lo rellena «Marcar el ritmo»). Déjalo vacío para usar «Tiempo»."),
-                        "fin": st.column_config.NumberColumn("Fin", step=0.25, width="small", help="Pulso donde acaba, si hay silencio después."),
+                        "duración": st.column_config.SelectboxColumn("Duración", options=lib.DUR_LABELS, width="medium", help="Cuánto dura la nota, para la partitura (negra = 1 pulso)."),
+                        "silencio": st.column_config.NumberColumn("Silencio", min_value=0.0, step=0.25, width="small", help="Silencio después de la nota, en pulsos (1 = negra)."),
                     },
                 )
                 st.caption("Apuntes de técnica por verso (sepáralos con /). «Parte» pone un título encima del verso, por ejemplo «Estribillo».")
