@@ -1,4 +1,3 @@
-
 window.CORE=(function(){
   var PC={"do":0,"re":2,"mi":4,"fa":5,"sol":7,"la":9,"si":11};
   var NS=["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#","La","La#","Si"],NF=["Do","Reb","Re","Mib","Mi","Fa","Solb","Sol","Lab","La","Sib","Si"];
@@ -32,7 +31,9 @@ window.CORE=(function(){
   }
   function timeline(song){
     var M=beatsPerBar(song.ts),f=flatten(song),n=f.length,st=new Array(n).fill(null),heldEnd=new Array(n).fill(null),last=null,any=false;
+    var hasPos=f.some(function(x){return typeof x.u.pos==="number";});
     for(var i=0;i<n;i++){
+      if(hasPos){ if(typeof f[i].u.pos==="number"){ st[i]=f[i].u.pos; any=true; } continue; }
       var b=+f[i].u.b; if(!(b>=1&&b<=M)) continue; any=true;
       var k; if(last===null) k=b-1; else { k=last+1; while(((k%M)+M)%M!==b-1) k++; }
       st[i]=k; last=k;
@@ -53,6 +54,7 @@ window.CORE=(function(){
     var items=[];
     for(var x=0;x<n;x++){
       var end=x+1<n?st[x+1]:(heldEnd[x]!==null?heldEnd[x]+1:st[x]+2);
+      var ue=f[x].u.e; if(typeof ue==="number"&&ue>st[x]) end=x+1<n?Math.min(end,ue):ue;
       if(end<=st[x]) end=st[x]+0.5;
       items.push({path:f[x].path,start:st[x],end:end,notes:(f[x].u.n||[])});
     }
