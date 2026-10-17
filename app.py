@@ -55,7 +55,7 @@ if not lib.gh_enabled():  # el proceso se reutiliza entre visitas: se reactiva s
 
 # --------------------------------------------------------------------------- utilidades
 
-for k, v in {"sel": None, "flash": None, "pending": None}.items():
+for k, v in {"sel": None, "flash": None, "pending": None, "view": "lib"}.items():
     st.session_state.setdefault(k, v)
 
 
@@ -136,6 +136,71 @@ def side_by_side(images, song, key, editable=False):
     with c2:
         st.markdown('<p class="lbl">Pasada a limpio</p>', unsafe_allow_html=True)
         return viewer(song, key=f"v-{key}", editable=editable)
+
+
+@st.cache_data(show_spinner=False, max_entries=500)
+def thumb(rel, mtime):
+    import io
+    from PIL import Image
+
+    data = lib.photo_bytes(rel)
+    if not data:
+        return None
+    im = Image.open(io.BytesIO(data)).convert("RGB")
+    w, h = im.size
+    im = im.crop((0, 0, w, min(h, int(w * 0.75))))  # parte de arriba de la hoja: título y primeros versos
+    im.thumbnail((420, 420))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=75)
+    return buf.getvalue()
+
+
+def song_state(r):
+    if not r.get("song"):
+        return "📷 Solo foto"
+    has_dur = any("d" in u for sec in r["song"].get("sections", []) for line in sec.get("lines", []) for u in line.get("units", []))
+    return "🎼 Con partitura" if has_dur else "✅ Pasada a limpio"
+
+
+def library(rows):
+    """Biblioteca: tarjetas con miniatura de la hoja, título y estado."""
+    c1, c2 = st.columns([2, 3])
+    q = c1.text_input("🔎 Buscar", key="libq", placeholder="Título de la canción", label_visibility="collapsed")
+    filt = c2.radio("Mostrar", ["Todas", "✅ Pasadas a limpio", "🎼 Con partitura", "📷 Solo foto"], horizontal=True, key="libf", label_visibility="collapsed")
+    shown = []
+    for r in rows:
+        stt = song_state(r)
+        if q and q.lower() not in (r.get("title") or "").lower():
+            continue
+        if filt == "✅ Pasadas a limpio" and not r.get("song"):
+            continue
+        if filt in ("🎼 Con partitura", "📷 Solo foto") and stt != filt:
+            continue
+        shown.append((r, stt))
+    st.caption(f"{len(shown)} de {len(rows)} canciones")
+    if not shown:
+        st.info("No hay canciones con ese filtro.")
+        return
+    per_row = 4
+    for i in range(0, len(shown), per_row):
+        cols = st.columns(per_row, gap="small")
+        for col, (r, stt) in zip(cols, shown[i : i + per_row]):
+            with col.container(border=True):
+                ph = (r.get("photos") or [None])[0]
+                img = None
+                if ph:
+                    f = lib.ROOT / ph
+                    img = thumb(ph, f.stat().st_mtime if f.exists() else 0)
+                if img:
+                    st.image(img, use_container_width=True)
+                else:
+                    st.markdown("<div style='height:90px;display:flex;align-items:center;justify-content:center;font-size:2.4rem;background:#eef1f6;border-radius:8px'>🎵</div>", unsafe_allow_html=True)
+                st.markdown(f"**{r.get('title') or 'Sin título'}**")
+                st.caption(stt + (f" · hoja {r['page']}" if r.get("page") else ""))
+                if st.button("Abrir", key=f"open-{r['id']}", use_container_width=True, type="primary" if r.get("song") else "secondary"):
+                    st.session_state.sel = r["id"]
+                    st.session_state.view = "song"
+                    st.rerun()
 
 
 def tools_panel(row, sel):
@@ -219,6 +284,7 @@ if pend:
             err = err or err2
         st.session_state.pending = None
         st.session_state.sel = sid
+        st.session_state.view = "song"
         flash("warning" if err else "success", ("Guardada aquí, pero no en GitHub: " + err) if err else "Guardada en «Canciones guardadas».")
         st.rerun()
     if b2.button("🔄 Volver a leer la hoja", use_container_width=True, key="pend-again"):
@@ -238,14 +304,18 @@ tab_saved, tab_new, tab_go = st.tabs(["📚 Canciones guardadas", "📷 Nueva ca
 with tab_saved:
     show_flash()
     rows = lib.list_songs()
+    ids = [r["id"] for r in rows]
     if not rows:
         st.info("Todavía no hay canciones. Ve a «Nueva canción» y haz una foto a una hoja.")
+    elif st.session_state.get("view") != "song" or st.session_state.sel not in ids:
+        library(rows)
     else:
-        ids = [r["id"] for r in rows]
-        if st.session_state.sel not in ids:
-            st.session_state.sel = ids[0]
-        sel = st.selectbox("Canción", ids, index=ids.index(st.session_state.sel), format_func=lambda i: label(next(r for r in rows if r["id"] == i)), key="pick")
-        st.session_state.sel = sel
+        sel = st.session_state.sel
+        nb1, nb2 = st.columns([1, 5])
+        if nb1.button("← Biblioteca", key="back-lib", use_container_width=True):
+            st.session_state.view = "lib"
+            st.rerun()
+        nb2.markdown(f"### {label(next(r for r in rows if r['id'] == sel))}")
         row = lib.get_song(sel)
         photos = [lib.photo_bytes(p) for p in row.get("photos") or [] if lib.photo_bytes(p)]
 
@@ -340,6 +410,7 @@ with tab_saved:
             if st.button("Borrar definitivamente", key=f"del-{sel}"):
                 _, err = safe(lib.delete_song, sel)
                 st.session_state.sel = None
+                st.session_state.view = "lib"
                 flash("warning" if err else "info", ("Borrada aquí, pero no en GitHub: " + err) if err else "Canción borrada.")
                 st.rerun()
 
@@ -371,6 +442,7 @@ with tab_new:
             sid, err2 = safe(lib.save_song, {"title": title_hint or "Hoja sin título", "page": "", "photos": photos or [], "song": None})
             err = err or err2
             st.session_state.sel = sid
+            st.session_state.view = "song"
             flash("warning" if err else "success", ("Guardada aquí, pero no en GitHub: " + err) if err else "Foto guardada en «Canciones guardadas». Pásala a limpio cuando quieras.")
             st.rerun()
         if go and images:
@@ -387,6 +459,7 @@ with tab_new:
             song = lib.song_from_text(t, ts, lyr)
             sid, err = safe(lib.save_song, {"title": song["title"], "page": "", "photos": [], "song": song})
             st.session_state.sel = sid
+            st.session_state.view = "song"
             flash("warning" if err else "success", ("Guardada aquí, pero no en GitHub: " + err) if err else "Canción creada. Ábrela en «Corregir» para añadir las notas.")
             st.rerun()
     show_flash()
@@ -417,3 +490,4 @@ with tab_go:
                 st.rerun()
             except Exception as e:
                 st.error(f"Ese archivo no es una copia válida del cancionero ({e}).")
+            
