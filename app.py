@@ -64,6 +64,10 @@ def sync_store(force=False):
 
 
 SYNC_ERR = sync_store()
+if not (secret("GITHUB_TOKEN") and secret("GITHUB_REPO")):
+    st.error("⚠️ Las canciones NO se están guardando de forma permanente: faltan GITHUB_TOKEN y GITHUB_REPO en Streamlit → Settings → Secrets. Todo lo que pases a limpio se perderá al actualizar la app.")
+elif SYNC_ERR:
+    st.error("⚠️ No se puede guardar en GitHub, así que las canciones se perderán al actualizar la app. Motivo: " + SYNC_ERR)
 
 # --------------------------------------------------------------------------- utilidades
 
@@ -174,45 +178,48 @@ def song_state(r):
     return "🎼 Con partitura" if has_dur else "✅ Pasada a limpio"
 
 
-def library(rows):
-    """Biblioteca: tarjetas con miniatura de la hoja, título y estado."""
-    c1, c2 = st.columns([2, 3])
-    q = c1.text_input("🔎 Buscar", key="libq", placeholder="Título de la canción", label_visibility="collapsed")
-    filt = c2.radio("Mostrar", ["Todas", "✅ Pasadas a limpio", "🎼 Con partitura", "📷 Solo foto"], horizontal=True, key="libf", label_visibility="collapsed")
-    shown = []
-    for r in rows:
-        stt = song_state(r)
-        if q and q.lower() not in (r.get("title") or "").lower():
-            continue
-        if filt == "✅ Pasadas a limpio" and not r.get("song"):
-            continue
-        if filt in ("🎼 Con partitura", "📷 Solo foto") and stt != filt:
-            continue
-        shown.append((r, stt))
-    st.caption(f"{len(shown)} de {len(rows)} canciones")
-    if not shown:
-        st.info("No hay canciones con ese filtro.")
-        return
-    per_row = 4
-    for i in range(0, len(shown), per_row):
+def song_card(col, r, stt):
+    with col.container(border=True):
+        ph = (r.get("photos") or [None])[0]
+        img = None
+        if ph:
+            f = lib.ROOT / ph
+            img = thumb(ph, f.stat().st_mtime if f.exists() else 0)
+        if img:
+            st.image(img, use_container_width=True)
+        else:
+            st.markdown("<div style='height:90px;display:flex;align-items:center;justify-content:center;font-size:2.4rem;background:#eef1f6;border-radius:8px'>🎵</div>", unsafe_allow_html=True)
+        st.markdown(f"**{r.get('title') or 'Sin título'}**")
+        st.caption(stt + (f" · hoja {r['page']}" if r.get("page") else ""))
+        if st.button("Abrir", key=f"open-{r['id']}", use_container_width=True, type="primary" if r.get("song") else "secondary"):
+            st.session_state.sel = r["id"]
+            st.session_state.view = "song"
+            st.rerun()
+
+
+def card_grid(items, per_row=4):
+    for i in range(0, len(items), per_row):
         cols = st.columns(per_row, gap="small")
-        for col, (r, stt) in zip(cols, shown[i : i + per_row]):
-            with col.container(border=True):
-                ph = (r.get("photos") or [None])[0]
-                img = None
-                if ph:
-                    f = lib.ROOT / ph
-                    img = thumb(ph, f.stat().st_mtime if f.exists() else 0)
-                if img:
-                    st.image(img, use_container_width=True)
-                else:
-                    st.markdown("<div style='height:90px;display:flex;align-items:center;justify-content:center;font-size:2.4rem;background:#eef1f6;border-radius:8px'>🎵</div>", unsafe_allow_html=True)
-                st.markdown(f"**{r.get('title') or 'Sin título'}**")
-                st.caption(stt + (f" · hoja {r['page']}" if r.get("page") else ""))
-                if st.button("Abrir", key=f"open-{r['id']}", use_container_width=True, type="primary" if r.get("song") else "secondary"):
-                    st.session_state.sel = r["id"]
-                    st.session_state.view = "song"
-                    st.rerun()
+        for col, (r, stt) in zip(cols, items[i : i + per_row]):
+            song_card(col, r, stt)
+
+
+def library(rows):
+    """Biblioteca en dos apartados: las limpias y las que faltan por pasar a limpio."""
+    q = st.text_input("🔎 Buscar", key="libq", placeholder="Buscar por título", label_visibility="collapsed")
+    items = [(r, song_state(r)) for r in rows if not q or q.lower() in (r.get("title") or "").lower()]
+    clean = [x for x in items if x[0].get("song")]
+    todo = [x for x in items if not x[0].get("song")]
+    st.markdown(f"#### ✨ Limpias ({len(clean)})")
+    if clean:
+        card_grid(clean)
+    else:
+        st.caption("Aún no hay ninguna pasada a limpio." if not q else "Ninguna limpia con ese título.")
+    st.markdown(f"#### 📷 Por pasar a limpio ({len(todo)})")
+    if todo:
+        card_grid(todo)
+    else:
+        st.caption("¡Todas pasadas a limpio!" if not q else "Ninguna con ese título.")
 
 
 def tools_panel(row, sel):
