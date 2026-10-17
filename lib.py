@@ -186,7 +186,7 @@ def slug(text: str) -> str:
 # arrancar la app se descargan de ahí. La rama es distinta de «main» para que guardar una
 # canción no reinicie la app.
 
-GH = {"token": "", "repo": "", "branch": "datos", "shas": {}, "error": ""}
+GH = {"token": "", "repo": "", "branch": "datos", "shas": {}, "error": "", "last": 0.0}
 
 
 def gh_enabled() -> bool:
@@ -222,7 +222,7 @@ def _blob_sha(data: bytes) -> str:
 
 def gh_sync(token: str, repo: str) -> str:
     """Prepara GitHub y trae a la carpeta local las canciones guardadas. Devuelve '' o un aviso."""
-    GH.update(token=token.strip(), repo=repo.strip().strip("/"), shas={}, error="")
+    GH.update(token=token.strip(), repo=repo.strip().strip("/"), error="")
     if not gh_enabled():
         return ""
     try:
@@ -257,6 +257,7 @@ def gh_sync(token: str, repo: str) -> str:
             rel = f.relative_to(ROOT).as_posix()
             if rel not in remote:
                 f.unlink()
+        GH["last"] = time.time()
         return ""
     except Exception as e:
         GH["error"] = str(e)
