@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--ink:#1d2129;--muted:#5d6675;--line:#d6dce5;--blue:#2747c9;--green:#1c8549;--red:#c2352b;--hl:#fff07a}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;color:var(--ink);background:transparent}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px}
+h3{margin:0;font-size:18px}
+.step{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--blue)}
+p{margin:0;line-height:1.45}
+.muted{color:var(--muted);font-size:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button{font:inherit;font-weight:700;font-size:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:10px 14px;min-height:46px;cursor:pointer}
+button.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+button.ok{background:var(--green);border-color:var(--green);color:#fff}
+button.on{border-color:var(--blue);color:var(--blue);background:#eef1fb}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.tap{width:100%;min-height:150px;font-size:28px;border-radius:16px;background:var(--blue);color:#fff;border:0;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.tap:active{transform:scale(.985);background:#1f3aa6}
+.tap.flash{background:var(--green)}
+.lyr{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:22px;font-weight:700;line-height:1.3;min-height:2.6em;align-items:baseline}
+.lyr span{color:#aab1bd}
+.lyr span.done{color:var(--ink)}
+.lyr span.cur{background:var(--hl);color:var(--ink);border-radius:6px;padding:0 6px;font-size:30px}
+.count{font-size:46px;font-weight:700;color:var(--red);text-align:center;min-height:56px}
+audio{width:100%}
+.res{font-size:15px;background:#eef6f0;border-radius:8px;padding:10px 12px;color:#14532d}
+.err{font-size:15px;background:#fbeceb;border-radius:8px;padding:10px 12px;color:#7f1d1d}
+input[type=range]{width:180px}
+</style></head>
+<body><div class="card" id="app">Cargando…</div>
+<script>
+/* --- protocolo mínimo de componentes de Streamlit --- */
+function send(type,data){ window.parent.postMessage(Object.assign({isStreamlitMessage:true,type:type},data||{}),"*"); }
+function height(){ send("streamlit:setFrameHeight",{height:document.documentElement.scrollHeight+4}); }
+window.addEventListener("message",function(ev){ var d=ev.data||{}; if(d.type==="streamlit:render") boot(d.args||{}); });
+send("streamlit:componentReady",{apiVersion:1});
+new ResizeObserver(height).observe(document.body);
+
+var A=null,S={};
+function boot(args){
+  if(A&&A.song===args.song&&A.audio===args.audio) return; // mismos datos: no reiniciar
+  A=args; var song=JSON.parse(args.song||"{}");
+  var units=[];(song.sections||[]).forEach(function(s){(s.lines||[]).forEach(function(l){(l.units||[]).forEach(function(u,ui){ units.push({t:(u.t||"").replace(/-$/,""),lineEnd:ui===l.units.length-1,pause:!!u.pause}); });});});
+  var M=parseInt(String(song.ts||"4/4"),10)||4,den=parseInt(String(song.ts||"4/4").split("/")[1],10)||4;
+  S={song:song,units:units,M:M,grid:den===8?2:4,tempo:song.tempo||80,audio:args.audio||"",rate:1,beatTaps:[],taps:[],phase:"intro",res:null};
+  render();
+}
+function el(t,c,txt){ var e=document.createElement(t); if(c) e.className=c; if(txt!==undefined) e.textContent=txt; return e; }
+function btn(t,f,c){ var b=el("button",c||"",t); b.type="button"; b.onclick=f; return b; }
+var app=document.getElementById("app"),audio=null,ctx=null,tick=null,startT=0;
+
+function stopAll(){ if(audio){ audio.pause(); } if(tick){ clearInterval(tick); tick=null; } if(ctx){ try{ctx.close();}catch(e){} ctx=null; } document.onkeydown=null; }
+function now(){ return audio? audio.currentTime : (performance.now()/1000-startT); }
+function click(acc){ if(!ctx) return; var o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime; o.type="square"; o.frequency.value=acc?1760:1180; g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(acc?.25:.14,t+.002); g.gain.exponentialRampToValueAtTime(.0001,t+.05); o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+.06); }
+
+function speedRow(){
+  var r=el("div","row"); r.appendChild(el("span","muted","Velocidad:"));
+  [[1,"Normal"],[0.75,"Lenta"],[0.5,"Muy lenta"]].forEach(function(o){ r.appendChild(btn(o[1],function(){ S.rate=o[0]; if(audio) audio.playbackRate=o[0]; render(); },S.rate===o[0]?"on":"")); });
+  return r;
+}
+function lyricStrip(){
+  var d=el("div","lyr"),i=S.taps.length,from=Math.max(0,i-3),to=Math.min(S.units.length,i+8);
+  for(var k=from;k<to;k++){ var s=el("span",k<i?"done":k===i?"cur":"",S.units[k].t||"·"); d.appendChild(s); }
+  if(i>=S.units.length) d.appendChild(el("span","done","✔ ¡Terminado!"));
+  return d;
+}
+function tapButton(label,fn){
+  var b=el("button","tap",label); b.type="button";
+  var go=function(e){ e.preventDefault(); fn(); b.classList.add("flash"); setTimeout(function(){b.classList.remove("flash");},90); };
+  b.addEventListener("pointerdown",go);
+  document.onkeydown=function(e){ if(e.code==="Space"||e.key===" "){ go(e); } };
+  return b;
+}
+function mkAudio(){ if(!S.audio) return null; var a=el("audio"); a.src=S.audio; a.controls=true; a.preload="auto"; a.playbackRate=S.rate; return a; }
+
+function render(){
+  stopAll(); app.replaceChildren();
+  if(!S.units.length){ app.appendChild(el("p","","Esta canción no tiene sílabas todavía.")); return; }
+  if(S.phase==="intro"){
+    app.appendChild(el("h3","",S.audio?"Marcar el ritmo con la canción":"Marcar el ritmo cantando"));
+    if(S.audio){
+      app.appendChild(el("p","","Son dos pasos cortos. Primero tocas siguiendo el golpe de la canción para que la app sepa la velocidad. Después tocas en cada sílaba."));
+      app.appendChild(speedRow());
+      app.appendChild(btn("Empezar: marcar el pulso",function(){ S.phase="beat"; S.beatTaps=[]; render(); },"pri"));
+    } else {
+      app.appendChild(el("p","","Sonará el metrónomo: primero un compás para contar, y después cantas la canción tocando el botón en cada sílaba. Si tienes la canción en MP3 o vídeo, súbela arriba y será más fácil."));
+      var r=el("div","row"); r.appendChild(el("span","muted","Velocidad ♩ = ")); var v=el("b","",String(S.tempo));
+      r.appendChild(btn("−",function(){ S.tempo=Math.max(30,S.tempo-4); render(); })); r.appendChild(v); r.appendChild(btn("+",function(){ S.tempo=Math.min(240,S.tempo+4); render(); }));
+      app.appendChild(r);
+      app.appendChild(btn("Empezar",function(){ S.phase="sing"; S.taps=[]; render(); },"pri"));
+    }
+  }
+  else if(S.phase==="beat"){
+    app.appendChild(el("div","step","Paso 1 de 2 · El pulso"));
+    app.appendChild(el("p","","Pon la canción y, cuando empiece a cantar, toca el botón siguiendo el golpe (como si dieras palmas). Empieza en un golpe fuerte, el «1» del compás, y toca al menos 8 veces."));
+    audio=mkAudio(); app.appendChild(audio); app.appendChild(speedRow());
+    var info=el("p","muted",S.beatTaps.length?S.beatTaps.length+" golpes":"Aún no has tocado.");
+    app.appendChild(tapButton("PULSO",function(){ if(audio&&audio.paused) return; S.beatTaps.push(now()); info.textContent=S.beatTaps.length+" golpes"; done.disabled=S.beatTaps.length<6; }));
+    app.appendChild(info);
+    var r2=el("div","row"),done=btn("Listo, siguiente paso",function(){ var bt=calcBeat(); if(!bt){ info.textContent="Los golpes no son regulares. Vuelve a intentarlo."; S.beatTaps=[]; return; } S.beat=bt; S.phase="syl"; S.taps=[]; render(); },"ok");
+    done.disabled=S.beatTaps.length<6;
+    r2.appendChild(btn("▶ Poner la canción",function(){ audio.currentTime=0; audio.playbackRate=S.rate; audio.play(); }));
+    r2.appendChild(btn("↺ Repetir",function(){ S.beatTaps=[]; render(); }));
+    r2.appendChild(done); app.appendChild(r2);
+  }
+  else if(S.phase==="syl"||S.phase==="sing"){
+    app.appendChild(el("div","step",S.phase==="syl"?"Paso 2 de 2 · Las sílabas":"Canta y toca en cada sílaba"));
+    app.appendChild(el("p","",S.phase==="syl"?"Pulsa «Poner la canción» y toca el botón justo cuando empieza cada sílaba. La que toca está en amarillo.":"Pulsa «Empezar», cuenta el primer compás con el metrónomo y canta tocando el botón en cada sílaba."));
+    var cnt=null;
+    if(S.phase==="syl"){ audio=mkAudio(); app.appendChild(audio); app.appendChild(speedRow()); }
+    else { cnt=el("div","count",""); app.appendChild(cnt); }
+    var strip=lyricStrip(); app.appendChild(strip);
+    var finish=function(){ S.res=compute(); S.phase="done"; render(); };
+    app.appendChild(tapButton("TOCA EN CADA SÍLABA",function(){
+      if(S.phase==="syl"&&(!audio||audio.paused)) return;
+      if(S.phase==="sing"&&!ctx) return;
+      if(S.taps.length>=S.units.length) return;
+      S.taps.push(now()); var ns=lyricStrip(); strip.replaceWith(ns); strip=ns;
+      if(S.taps.length>=S.units.length) setTimeout(finish,400);
+    }));
+    var r3=el("div","row");
+    if(S.phase==="syl") r3.appendChild(btn("▶ Poner la canción",function(){ S.taps=[]; var ns=lyricStrip(); strip.replaceWith(ns); strip=ns; audio.currentTime=0; audio.playbackRate=S.rate; audio.play(); }));
+    else r3.appendChild(btn("▶ Empezar",function(){ startSing(cnt); }));
+    r3.appendChild(btn("⟲ Deshacer la última",function(){ S.taps.pop(); var ns=lyricStrip(); strip.replaceWith(ns); strip=ns; }));
+    r3.appendChild(btn("↺ Empezar de nuevo",function(){ S.taps=[]; render(); }));
+    r3.appendChild(btn("Terminar aquí",function(){ if(S.taps.length>1) finish(); }));
+    app.appendChild(r3);
+  }
+  else if(S.phase==="done"){
+    var R=S.res;
+    if(!R){ app.appendChild(el("p","err","No se ha podido calcular el ritmo. Prueba otra vez.")); app.appendChild(btn("↺ Repetir",function(){ S.phase="intro"; render(); },"pri")); return; }
+    app.appendChild(el("h3","","Ritmo marcado"));
+    app.appendChild(el("p","res","Velocidad ♩ = "+R.tempo+" · "+R.items.filter(function(x){return x.pos!==null;}).length+" sílabas colocadas en el compás."+(R.items.some(function(x){return x.pos!==null&&x.pos<0;})?" Empieza en anacrusa.":"")));
+    app.appendChild(el("p","muted","Al guardar, la partitura y «Escuchar» usarán este ritmo. Si no te convence, repítelo."));
+    var r4=el("div","row");
+    r4.appendChild(btn("✅ Guardar este ritmo",function(){ send("streamlit:setComponentValue",{value:{nonce:Date.now(),tempo:R.tempo,items:R.items},dataType:"json"}); r4.replaceChildren(el("p","res","Guardando…")); },"ok"));
+    r4.appendChild(btn("↺ Repetir",function(){ S.phase="intro"; render(); }));
+    app.appendChild(r4);
+  }
+  height();
+}
+function startSing(cnt){
+  stopAll(); var AC=window.AudioContext||window.webkitAudioContext; ctx=new AC();
+  var spb=60/S.tempo,beat=0; S.taps=[]; startT=performance.now()/1000;
+  S.beat={spb:spb,t1:S.M*spb}; // el 1 del primer compás llega tras el compás de cuenta
+  click(true); cnt.textContent="1";
+  tick=setInterval(function(){
+    var b=Math.floor((performance.now()/1000-startT)/spb);
+    if(b!==beat){ beat=b; click(b%S.M===0); cnt.textContent=b<S.M?String(b+1):""; }
+  },15);
+  document.onkeydown=function(e){ if(e.code==="Space"){ e.preventDefault(); document.querySelector(".tap").dispatchEvent(new PointerEvent("pointerdown")); } };
+}
+function calcBeat(){
+  var t=S.beatTaps; if(t.length<4) return null;
+  var d=[]; for(var i=1;i<t.length;i++) d.push(t[i]-t[i-1]); var s=d.slice().sort(function(a,b){return a-b;}),med=s[Math.floor(s.length/2)];
+  var good=d.filter(function(x){return Math.abs(x-med)<med*0.25;}); if(good.length<d.length*0.6) return null;
+  // ajuste por mínimos cuadrados de t_i = t1 + i*spb (usando el número de golpe más cercano)
+  var idx=t.map(function(x){return Math.round((x-t[0])/med);}),n=t.length,sx=0,sy=0,sxx=0,sxy=0;
+  for(var j=0;j<n;j++){ sx+=idx[j]; sy+=t[j]; sxx+=idx[j]*idx[j]; sxy+=idx[j]*t[j]; }
+  var spb=(n*sxy-sx*sy)/(n*sxx-sx*sx),t1=(sy-spb*sx)/n;
+  if(!(spb>0.2&&spb<2.5)) return null;
+  return {spb:spb,t1:t1};
+}
+function compute(){
+  var B=S.beat; if(!B||!S.taps.length) return null;
+  var q=1/S.grid,pos=S.taps.map(function(t){ return Math.round(((t-B.t1)/B.spb)/q)*q; });
+  for(var i=1;i<pos.length;i++) if(pos[i]<=pos[i-1]) pos[i]=pos[i-1]+q;
+  var items=S.units.map(function(u,i){
+    if(i>=pos.length) return {pos:null,e:null};
+    var p=pos[i],next=i+1<pos.length?pos[i+1]:null,e=null;
+    if(next===null) e=p+2; else if((u.lineEnd||u.pause)&&next-p>3) e=p+2;
+    return {pos:p,e:e};
+  });
+  return {tempo:Math.round(60/B.spb),items:items};
+}
+</script>
+</body></html>
