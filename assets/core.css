@@ -63,3 +63,4 @@ html,body{background:var(--bg);color:var(--ink)}
 .score .sn.now .head{fill:var(--beat-odd);stroke:var(--beat-odd)}
 .score .sn.now line,.score .sn.now path{stroke:var(--beat-odd)}
 .score-note{font-size:13px;color:var(--muted);margin:10px 0 0}
+.score .hit{fill:transparent;stroke:none}
