@@ -32,6 +32,16 @@ window.CORE=(function(){
   function timeline(song){
     var M=beatsPerBar(song.ts),f=flatten(song),n=f.length,st=new Array(n).fill(null),heldEnd=new Array(n).fill(null),last=null,any=false;
     var hasPos=f.some(function(x){return typeof x.u.pos==="number";});
+    var hasDur=!hasPos&&f.some(function(x){return typeof x.u.d==="number"&&x.u.d>0;});
+    if(hasDur){
+      // duraciones: posiciones seguidas y se encaja el primer número de tiempo de la hoja (anacrusa)
+      var t=0,durEnd=new Array(n);
+      for(var di=0;di<n;di++){ var dd=(typeof f[di].u.d==="number"&&f[di].u.d>0)?f[di].u.d:1; st[di]=t; durEnd[di]=t+dd; t+=dd+((typeof f[di].u.r==="number"&&f[di].u.r>0)?f[di].u.r:0); }
+      var shift=0; for(var fi=0;fi<n;fi++){ var fb=+f[fi].u.b; if(fb>=1&&fb<=M){ shift=(((fb-1-st[fi])%M)+M)%M; break; } }
+      var itemsD=[];
+      for(var xi=0;xi<n;xi++) itemsD.push({path:f[xi].path,start:st[xi]+shift,end:durEnd[xi]+shift,notes:(f[xi].u.n||[])});
+      return {items:itemsD,M:M,origin:0};
+    }
     for(var i=0;i<n;i++){
       if(hasPos){ if(typeof f[i].u.pos==="number"){ st[i]=f[i].u.pos; any=true; } continue; }
       var b=+f[i].u.b; if(!(b>=1&&b<=M)) continue; any=true;
