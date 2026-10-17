@@ -112,6 +112,7 @@ function show(){
   side.appendChild(bar);
   if(dict.err){ var er=document.createElement("p"); er.className="hint"; er.textContent=dict.err; side.appendChild(er); dict.err=""; }
   if(dict.on) panel.appendChild(dictPanel());
+  if(st.edit&&!st.k) panel.appendChild(textDict());
   else if(st.edit&&!selPath){ var h=document.createElement("p"); h.className="hint"; h.textContent="Toca la nota que quieras cambiar."+(st.k?" (Para cambiar notas, pon el tono a 0.)":""); side.appendChild(h); }
   var pg=document.createElement("div"); pg.className="page"+(st.edit?" editing":""); main.appendChild(pg);
   if(st.score&&window.SCORE){ pg.classList.add("plain"); SCORE.render(s,pg,{transpose:st.k}); }
@@ -284,23 +285,62 @@ function allPaths(){ var all=[],s=S[st.i]; s.sections.forEach(function(sec,si){ 
 function startDict(){
   if(!SR) return;
   if(st.k) st.k=0;
-  st.edit=true; dict.on=true; dict.err=""; dict.interim=""; if(!selPath) selPath=allPaths()[0]; selNote=0;
-  var r=new SR(); r.lang="es-ES"; r.continuous=true; r.interimResults=true; dict.rec=r;
+  st.edit=true; dict.on=true; dict.err=""; dict.interim=""; dict.fails=0; if(!selPath) selPath=allPaths()[0]; selPaths=[selPath]; selNote=0;
+  listen();
+  clearInterval(dict.watch);
+  // vigilante: si el navegador ha cortado la escucha y no ha vuelto, se reactiva
+  dict.watch=setInterval(function(){ if(!dict.on){ clearInterval(dict.watch); return; } if(!dict.active&&Date.now()-(dict.lastStart||0)>2500) listen(); },2000);
+}
+function listen(){
+  if(!dict.on) return;
+  try{ if(dict.rec){ dict.rec.onend=null; dict.rec.abort(); } }catch(e){}
+  var r=new SR(); r.lang="es-ES"; r.continuous=true; r.interimResults=true; r.maxAlternatives=1; dict.rec=r;
+  dict.lastStart=Date.now();
+  r.onstart=function(){ dict.active=true; dict.fails=0; setStatus("🎙 Escuchando"); };
   r.onresult=function(e){
     var inter="";
     for(var i=e.resultIndex;i<e.results.length;i++){ var t=e.results[i][0].transcript; if(e.results[i].isFinal) runCmd(t); else inter+=t; }
     dict.interim=inter; var el=document.getElementById("dict-live"); if(el) el.textContent=inter?"… "+inter:"";
   };
-  r.onerror=function(e){ if(e.error==="not-allowed"||e.error==="service-not-allowed"){ dict.err="No hay permiso para usar el micrófono. Permítelo en el navegador y vuelve a pulsar «Dictar»."; dict.on=false; show(); } };
-  r.onend=function(){ if(dict.on){ try{ r.start(); }catch(e){} } };
-  try{ r.start(); }catch(e){}
+  r.onerror=function(e){
+    if(e.error==="not-allowed"||e.error==="service-not-allowed"){ dict.err="No hay permiso para usar el micrófono. Permítelo en el navegador y vuelve a pulsar «Dictar»."; stopDict(); show(); return; }
+    if(e.error!=="no-speech"&&e.error!=="aborted") dict.fails=(dict.fails||0)+1;
+  };
+  r.onend=function(){
+    dict.active=false;
+    if(!dict.on) return;
+    setStatus("🔄 Reconectando…");
+    if((dict.fails||0)>6){ dict.err="El reconocimiento de voz del navegador se ha cortado varias veces. Puedes usar el cuadro «Dictar con el teclado» de abajo."; stopDict(); show(); return; }
+    setTimeout(listen,250);
+  };
+  try{ r.start(); }catch(e){ dict.active=false; }
 }
-function stopDict(){ dict.on=false; if(dict.rec){ try{ dict.rec.stop(); }catch(e){} } dict.rec=null; }
+function textDict(){
+  var d=document.createElement("div"); d.className="ed";
+  var r=document.createElement("div"); r.className="r";
+  r.append(sp("⌨️ Dictar con el teclado","t"));
+  d.append(r);
+  var ta=document.createElement("textarea"); ta.id="tdict"; ta.rows=2; ta.placeholder="Pulsa aquí y usa el micrófono del teclado del móvil, o escribe: «Fa negra, Sol corchea, cuatro corcheas, bien, silencio de negra…»";
+  ta.style.cssText="width:100%;box-sizing:border-box;font:inherit;font-size:15px;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg);color:var(--ink);resize:vertical";
+  ta.value=window.__tdict||""; ta.oninput=function(){ window.__tdict=ta.value; };
+  d.append(ta);
+  var r2=document.createElement("div"); r2.className="r";
+  r2.append(b("Aplicar desde «"+(selPath?(unitAt(selPath).t||""):"el principio")+"»",function(){
+    var t=ta.value.trim(); if(!t) return;
+    if(!selPath){ selPath=allPaths()[0]; selPaths=[selPath]; }
+    window.__tdict=""; runCmd(t);
+  },"pri"),sp("Se aplica en orden, nota a nota, desde la seleccionada.","lbl"));
+  d.append(r2);
+  return d;
+}
+function setStatus(t){ var el=document.getElementById("dict-status"); if(el) el.textContent=t; }
+function stopDict(){ dict.on=false; dict.active=false; clearInterval(dict.watch); if(dict.rec){ try{ dict.rec.onend=null; dict.rec.stop(); }catch(e){} } dict.rec=null; }
 function dictPanel(){
   var d=document.createElement("div"); d.className="ed";
   var r1=document.createElement("div"); r1.className="r";
   var u=selPath?unitAt(selPath):null;
-  r1.append(sp("🎙","t"),sp(u?("«"+(u.t||"")+"» "+((u.n||[]).join("-")||"—")+(u.d?" · "+durText(u.d).replace(/ \(.*$/,""):"")):"","t"));
+  var stEl=sp(dict.active?"🎙 Escuchando":"🔄 Reconectando…","lbl"); stEl.id="dict-status";
+  r1.append(stEl,sp(u?("«"+(u.t||"")+"» "+((u.n||[]).join("-")||"—")+(u.d?" · "+durText(u.d).replace(/ \(.*$/,""):"")):"","t"));
   r1.append(el2("sepv"),b("◀",function(){ move(-1); },"","Anterior"),b("▶",function(){ move(1); },"","Siguiente"),b("↩",undoCmd,"","Deshacer"),b("?",function(){ showHelp=!showHelp; show(); },showHelp?"on":"","Ayuda"));
   if(dirty) r1.append(b("💾 Guardar",save,"pri"));
   d.append(r1);
