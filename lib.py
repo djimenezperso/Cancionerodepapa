@@ -235,8 +235,64 @@ def _parse_json(text: str):
         raise
 
 
-def read_sheet(images: list[bytes], api_key: str, model: str, title_hint: str = "") -> tuple[dict, list[str]]:
-    """Envía las fotos a Claude y devuelve (canción, dudas)."""
+def read_sheet(images: list[bytes], api_key: str, model: str, title_hint: str = "", provider: str = "anthropic") -> tuple[dict, list[str]]:
+    """Envía las fotos al modelo elegido (Claude u OpenAI) y devuelve (canción, dudas)."""
+    if provider == "openai":
+        return _read_openai(images, api_key, model, title_hint)
+    return _read_anthropic(images, api_key, model, title_hint)
+
+
+def _finish(text: str, cut: bool, title_hint: str) -> tuple[dict, list[str]]:
+    try:
+        data = _parse_json(text)
+    except Exception as e:
+        extra = " La respuesta salió cortada; prueba con menos fotos a la vez." if cut else ""
+        raise ReadError("No se ha podido entender la respuesta." + extra) from e
+    doubts = [str(d) for d in (data.get("doubts") or []) if str(d).strip()]
+    song = normalize(data)
+    if title_hint and (not song["title"] or song["title"] == "Sin título"):
+        song["title"] = title_hint
+    return song, doubts
+
+
+REFUSED = (
+    "El modelo no ha transcrito esta hoja (a veces pasa con letras de canciones conocidas). "
+    "Puedes escribir la letra a mano en «Nueva canción» y corregir las notas en la tabla."
+)
+
+
+def _read_openai(images: list[bytes], api_key: str, model: str, title_hint: str) -> tuple[dict, list[str]]:
+    import openai
+
+    client = openai.OpenAI(api_key=api_key)
+    prompt = PROMPT + (f"\n\nEl título de la canción es: {title_hint}" if title_hint else "")
+    content = [{"type": "text", "text": prompt}] + [
+        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + _jpeg_b64(r, 2048), "detail": "high"}} for r in images
+    ]
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": content}],
+            response_format={"type": "json_object"},
+            max_completion_tokens=16000,
+        )
+    except openai.AuthenticationError as e:
+        raise ReadError("La clave de OpenAI no es válida. Revísala en la barra lateral o en los Secrets.") from e
+    except openai.RateLimitError as e:
+        raise ReadError("OpenAI dice que no hay saldo o que has llegado al límite. Revisa tu cuenta en platform.openai.com.") from e
+    except openai.NotFoundError as e:
+        raise ReadError(f"El modelo «{model}» no está disponible para esta clave. Elige otro en la barra lateral.") from e
+    except openai.BadRequestError as e:
+        raise ReadError(f"OpenAI no ha aceptado la petición con el modelo «{model}». Prueba con otro modelo. Detalle: {e}") from e
+    except openai.APIError as e:
+        raise ReadError(f"OpenAI ha devuelto un error: {e}") from e
+    choice = resp.choices[0]
+    if getattr(choice.message, "refusal", None) or not (choice.message.content or "").strip():
+        raise ReadError(REFUSED)
+    return _finish(choice.message.content, choice.finish_reason == "length", title_hint)
+
+
+def _read_anthropic(images: list[bytes], api_key: str, model: str, title_hint: str) -> tuple[dict, list[str]]:
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
@@ -255,20 +311,8 @@ def read_sheet(images: list[bytes], api_key: str, model: str, title_hint: str = 
         raise ReadError(f"La API ha devuelto un error: {e}") from e
     text = "".join(getattr(b, "text", "") for b in msg.content)
     if msg.stop_reason == "refusal" or not text.strip():
-        raise ReadError(
-            "Claude no ha transcrito esta hoja (a veces pasa con letras de canciones conocidas). "
-            "Puedes escribir la letra a mano en «Nueva canción» y corregir las notas en la tabla."
-        )
-    try:
-        data = _parse_json(text)
-    except Exception as e:
-        cut = " La respuesta salió cortada; prueba con menos fotos a la vez." if msg.stop_reason == "max_tokens" else ""
-        raise ReadError("No se ha podido entender la respuesta." + cut) from e
-    doubts = [str(d) for d in (data.get("doubts") or []) if str(d).strip()]
-    song = normalize(data)
-    if title_hint and (not song["title"] or song["title"] == "Sin título"):
-        song["title"] = title_hint
-    return song, doubts
+        raise ReadError(REFUSED)
+    return _finish(text, msg.stop_reason == "max_tokens", title_hint)
 
 
 def song_from_text(title: str, ts: str, lyrics: str) -> dict:
