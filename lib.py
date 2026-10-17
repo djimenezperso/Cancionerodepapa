@@ -207,11 +207,17 @@ def _gh(method: str, path: str, **kw):
 
 
 def _gh_fail(r, what: str) -> str:
-    if r.status_code in (401, 403):
-        return f"GitHub no deja {what}: revisa que el token tenga permiso de «Contents: Read and write» en este repositorio."
+    try:
+        detail = (r.json() or {}).get("message", "")
+    except Exception:
+        detail = ""
+    if r.status_code == 401:
+        return f"GitHub no acepta el token al {what} (puede estar mal copiado o caducado). Crea uno nuevo y ponlo en GITHUB_TOKEN. [{detail}]"
+    if r.status_code == 403:
+        return f"El token no tiene permiso para {what}: en GitHub, edita el token y pon «Contents: Read and write» para el repositorio «{GH['repo']}». [{detail}]"
     if r.status_code == 404:
-        return f"GitHub no encuentra el repositorio «{GH['repo']}». Revisa GITHUB_REPO (usuario/nombre) y que el token tenga acceso a él."
-    return f"GitHub ha fallado al {what} ({r.status_code})."
+        return f"GitHub no encuentra «{GH['repo']}» al {what}. GITHUB_REPO debe ser exactamente usuario/nombre (por ejemplo djimenezperso/cancionerodepapa) y el token debe tener acceso a ese repositorio. [{detail}]"
+    return f"GitHub ha fallado al {what} (error {r.status_code}). [{detail}]"
 
 
 def _blob_sha(data: bytes) -> str:
