@@ -229,6 +229,13 @@ function render(song,root,o){
       E("line",{x1:x,x2:x,y1:0,y2:40,"stroke-width":last?"1.2":"1"},svg);
       if(last) E("rect",{x:x+3,y:0,width:4,height:40,"class":"fillink"},svg);
     });
+    // arco sobre las notas de una misma sílaba (melisma)
+    for(var hi=0;hi<heads.length;hi++){
+      if(heads[hi].it.mel||!heads[hi+1]||!heads[hi+1].it.mel) continue;
+      var hj=hi; while(heads[hj+1]&&heads[hj+1].it.mel) hj++;
+      var h0=heads[hi],h1=heads[hj],below=h0.up,yy=below?Math.max(h0.y,h1.y)+9:Math.min(h0.y,h1.y)-9,cy2=below?yy+9:yy-9;
+      E("path",{d:"M"+(h0.x+2)+","+yy+" Q"+((h0.x+h1.x)/2)+","+cy2+" "+(h1.x-2)+","+yy,fill:"none","stroke-width":"1.3"},svg);
+    }
     // ligaduras
     heads.forEach(function(h,i){ if(!h.it.tie) return; var nx=heads[i+1],dy=h.up?7:-7,cy=h.up?14:-14;
       if(nx) E("path",{d:"M"+(h.x+4)+","+(h.y+dy)+" Q"+((h.x+nx.x)/2)+","+(h.y+cy)+" "+(nx.x-4)+","+(nx.y+dy),fill:"none","stroke-width":"1.3"},svg);
