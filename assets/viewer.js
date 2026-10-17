@@ -63,7 +63,7 @@ var PREF="cdp-visor-v1";
 try{ var sv=JSON.parse(localStorage.getItem(PREF)||"{}"); ["score","size","click","mel","edit"].forEach(function(k){ if(k in sv) st[k]=sv[k]; }); }catch(e){}
 function savePrefs(){ try{ localStorage.setItem(PREF,JSON.stringify({score:st.score,size:st.size,click:st.click,mel:st.mel,edit:st.edit})); }catch(e){} }
 var dict={on:false,rec:null,interim:"",last:"",undo:[],err:""};
-var S,pl=window.__vpl||(window.__vpl=new CORE.Player()),root=document.getElementById("app"),lastEl=null,dirty=false,selPath=null,selNote=0,selPaths=[],multi=false,ligar=false,showHelp=false;
+var S,pl=window.__vpl||(window.__vpl=new CORE.Player()),root=document.getElementById("app"),lastEl=null,dirty=false,selPath=null,selNote=0,selPaths=[],multi=false,ligar=false,showHelp=false,selRest=false;
 
 function b(t,f,c,lab){ var e=document.createElement("button"); e.type="button"; e.textContent=t; e.onclick=f; if(c) e.className=c; if(lab) e.setAttribute("aria-label",lab); return e; }
 function sp(t,c){ var e=document.createElement("span"); e.className=c||"v"; e.textContent=t; return e; }
@@ -118,16 +118,20 @@ function show(){
   if(st.score&&window.SCORE){ pg.classList.add("plain"); SCORE.render(s,pg,{transpose:st.k}); }
   else CORE.render(s,pg,{transpose:st.k});
   if(st.edit&&!st.k){
-    pg.addEventListener("click",function(e){ var t=e.target.closest("[data-p]"); if(!t||!t.dataset.p) return;
+    pg.addEventListener("click",function(e){
+      var tr=e.target.closest("[data-rp]"); if(tr&&tr.dataset.rp){ selPath=tr.dataset.rp; selPaths=[selPath]; selRest=true; multi=false; show(); return; }
+      var t=e.target.closest("[data-p]"); if(!t||!t.dataset.p) return; selRest=false;
       var p=t.dataset.p;
       if(multi&&selPath){ var all=allPaths(),a=all.indexOf(selPath),z=all.indexOf(p); selPaths=all.slice(Math.min(a,z),Math.max(a,z)+1); }
       else { selPath=p; selPaths=[p]; }
       selNote=0; show(); });
     if(selPath&&dict.on){ pg.querySelectorAll('[data-p="'+selPath+'"]').forEach(function(x){x.classList.add("sel"); setTimeout(function(){ x.scrollIntoView({block:"center",behavior:"smooth"}); },30);}); }
     else if(selPath){
+      if(selRest){ pg.querySelectorAll('[data-rp="'+selPath+'"]').forEach(function(x){ x.classList.add("sel"); }); panel.appendChild(restEditor()); }
+      else {
       if(!selPaths.length||selPaths.indexOf(selPath)<0) selPaths=[selPath];
       var se=[]; selPaths.forEach(function(sp2){ pg.querySelectorAll('[data-p="'+sp2+'"]').forEach(function(x){ x.classList.add("sel"); se.push(x); }); });
-      var ed=selPaths.length>1?multiEditor(s):editor(s); panel.appendChild(ed);
+      var ed=selPaths.length>1?multiEditor(s):editor(s); panel.appendChild(ed); }
       if(!wide&&se.length) setTimeout(function(){ se[0].scrollIntoView({block:"center",behavior:"smooth"}); },30);
     }
   }
@@ -218,6 +222,24 @@ function oneHere(){
   var s=S[st.i],M=CORE.beatsPerBar(s.ts),tl=CORE.timeline(s),i=allPaths().indexOf(selPath); if(i<0) return;
   var pos=tl.items[i].start-tl.origin,m=((pos%M)+M)%M; if(Math.abs(m)<1e-6) return;
   shiftBeats(m<=M/2?-m:M-m);
+}
+function restEditor(){
+  var u=unitAt(selPath),ed=document.createElement("div"); ed.className="ed";
+  var top=document.createElement("div"); top.className="r";
+  top.append(sp("Silencio detrás de «"+(u.t||"")+"»","t"),sp(u.r?durText(u.r).replace(/ \(.*$/,""):(u.e?"(hueco hasta la siguiente)":"(hueco)"),"lbl"));
+  ed.append(top);
+  var r=document.createElement("div"); r.className="r";
+  r.append(sp("Cambiar a:","lbl"));
+  DSHORT.forEach(function(d){ r.append(b(d[0],function(){ u.r=d[1]; delete u.e; changed(); })); });
+  ed.append(r);
+  var r2=document.createElement("div"); r2.className="r";
+  r2.append(b("🗑 Quitar silencio",function(){ delete u.r; delete u.e; delete u.pos; selRest=false; changed(); },"pri"),
+    b("Ver la nota «"+(u.t||"")+"»",function(){ selRest=false; show(); }),
+    b("Cerrar",function(){ selRest=false; selPath=null; selPaths=[]; show(); }));
+  if(dirty) r2.append(b("💾 Guardar",save,"pri"));
+  ed.append(r2);
+  var h=document.createElement("p"); h.className="help"; h.textContent="El silencio va pegado a la nota de antes. Si quitas uno que salía porque faltaba alguna duración, la nota de antes se alarga hasta la siguiente."; ed.append(h);
+  return ed;
 }
 function el2(c){ var e=document.createElement("span"); e.className=c; return e; }
 function durText(v){
