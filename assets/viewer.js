@@ -140,11 +140,16 @@ function durRow(apply,cur){
 }
 function navRow(){
   var r=document.createElement("div"); r.className="r";
+  var rb=document.createElement("div"); rb.className="r";
+  if(selPaths.length<=1) rb.append(b("1 aquí",oneHere,"","Poner el primer tiempo del compás en esta nota"));
+  rb.append(sp("Compás","lbl"),b("◀",function(){ shiftBeats(-1); },"","Correr las barras un tiempo a la izquierda"),b("▶",function(){ shiftBeats(1); },"","Correr las barras un tiempo a la derecha"),
+    b("◀ ½",function(){ shiftBeats(-0.5); },"","Correr medio tiempo a la izquierda"),b("½ ▶",function(){ shiftBeats(0.5); },"","Correr medio tiempo a la derecha"));
   r.append(b("◀",function(){ move(-1); },"","Anterior"),b("▶",function(){ move(1); },"","Siguiente"),
     b(multi?"Varias ✓":"Varias",function(){ multi=!multi; if(!multi){ selPaths=[selPath]; } show(); },multi?"on":""),
     b("Cerrar",function(){ selPath=null; selPaths=[]; multi=false; show(); }));
   if(dirty) r.append(b("💾 Guardar",save,"pri"));
-  return r;
+  var w=document.createElement("div"); w.style.display="contents"; w.append(rb,r);
+  return w;
 }
 function editor(s){
   var u=unitAt(selPath),M=CORE.beatsPerBar(s.ts),ed=document.createElement("div"); ed.className="ed";
@@ -191,6 +196,23 @@ function multiEditor(s){
   var h=document.createElement("p"); h.className="help"; h.textContent="Con «Varias» activado, toca la primera y la última nota del trozo."; ed.append(h);
   ed.append(navRow());
   return ed;
+}
+/* mover las barras de compás: se recalculan los números de tiempo de todas las sílabas */
+function shiftBeats(delta){
+  var s=S[st.i],M=CORE.beatsPerBar(s.ts),tl=CORE.timeline(s),paths=allPaths(),intD=Math.abs(delta-Math.round(delta))<1e-6;
+  paths.forEach(function(p,i){
+    var u=unitAt(p),it=tl.items[i]; if(!it) return;
+    if(typeof u.pos==="number"){ u.pos=Math.round((u.pos+delta)*1000)/1000; if(typeof u.e==="number") u.e=Math.round((u.e+delta)*1000)/1000; }
+    var ns=it.start-tl.origin+delta;
+    if(Math.abs(ns-Math.round(ns))<1e-6) u.b=((Math.round(ns)%M)+M)%M+1; else delete u.b;
+    if(u.u){ if(intD) u.u=((((u.u-1+Math.round(delta))%M)+M)%M)+1; else delete u.u; }
+  });
+  changed();
+}
+function oneHere(){
+  var s=S[st.i],M=CORE.beatsPerBar(s.ts),tl=CORE.timeline(s),i=allPaths().indexOf(selPath); if(i<0) return;
+  var pos=tl.items[i].start-tl.origin,m=((pos%M)+M)%M; if(Math.abs(m)<1e-6) return;
+  shiftBeats(m<=M/2?-m:M-m);
 }
 function el2(c){ var e=document.createElement("span"); e.className=c; return e; }
 function durText(v){
