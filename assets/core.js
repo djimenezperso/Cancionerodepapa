@@ -41,7 +41,7 @@ window.CORE=(function(){
         var dd=(typeof f[di].u.d==="number"&&f[di].u.d>0)?f[di].u.d:Math.round(bd*4)/4||1; st[di]=t; durEnd[di]=t+dd; t+=dd+((typeof f[di].u.r==="number"&&f[di].u.r>0)?f[di].u.r:0); }
       var shift=0; for(var fi=0;fi<n;fi++){ var fb=+f[fi].u.b; if(fb>=1&&fb<=M){ shift=(((fb-1-st[fi])%M)+M)%M; break; } }
       var itemsD=[];
-      for(var xi=0;xi<n;xi++) itemsD.push({path:f[xi].path,start:st[xi]+shift,end:durEnd[xi]+shift,notes:(f[xi].u.n||[])});
+      for(var xi=0;xi<n;xi++) itemsD.push({path:f[xi].path,start:st[xi]+shift,end:durEnd[xi]+shift,notes:(f[xi].u.n||[]),nd:f[xi].u.nd});
       return {items:itemsD,M:M,origin:0};
     }
     for(var i=0;i<n;i++){
@@ -68,7 +68,7 @@ window.CORE=(function(){
       var end=x+1<n?st[x+1]:(heldEnd[x]!==null?heldEnd[x]+1:st[x]+2);
       var ue=f[x].u.e; if(typeof ue==="number"&&ue>st[x]) end=x+1<n?Math.min(end,ue):ue;
       if(end<=st[x]) end=st[x]+0.5;
-      items.push({path:f[x].path,start:st[x],end:end,notes:(f[x].u.n||[])});
+      items.push({path:f[x].path,start:st[x],end:end,notes:(f[x].u.n||[]),nd:f[x].u.nd});
     }
     var minS=items.length?Math.min.apply(null,items.map(function(t){return t.start;})):0;
     return {items:items,M:M,origin:Math.floor(minS/M)*M};
@@ -151,9 +151,10 @@ window.CORE=(function(){
       if(o.melody!==false){
         tl.items.forEach(function(it){
           var ns=it.notes.map(function(n){return parseNote(n);}).filter(Boolean); if(!ns.length) return;
-          var d=(it.end-it.start)/ns.length;
+          var d=(it.end-it.start)/ns.length,useNd=it.nd&&it.nd.length===ns.length,ndSum=useNd?it.nd.reduce(function(a,x){return a+x;},0):0,acc=0;
           ns.forEach(function(p,ix){
-            var s=T(it.start+ix*d),dur=Math.max(0.12,d*spb*0.94),f=440*Math.pow(2,(p.midi+k-69)/12);
+            var nd=useNd?it.nd[ix]*(it.end-it.start)/ndSum:d,off=useNd?acc:ix*d; acc+=nd;
+            var s=T(it.start+off),dur=Math.max(0.12,nd*spb*0.94),f=440*Math.pow(2,(p.midi+k-69)/12);
             if(o.piano){ pianoNote(ctx,master,f,s,dur); return; }
             [[1,"triangle",0.16],[2,"sine",0.04]].forEach(function(h){
               var os=ctx.createOscillator(),g=ctx.createGain(); os.type=h[1]; os.frequency.value=f*h[0];
