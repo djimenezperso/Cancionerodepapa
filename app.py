@@ -26,24 +26,35 @@ st.caption("Haz una foto a la hoja y se pasa a limpio: notas, tiempos del compá
 
 # --------------------------------------------------------------------------- ajustes
 
-MODELS = ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"]
+PROVIDERS = {
+    "OpenAI": {"id": "openai", "secret": "OPENAI_API_KEY", "models": ["gpt-5", "gpt-5-mini", "gpt-4.1", "gpt-4o"], "where": "platform.openai.com → API keys",
+               "help": "gpt-5 lee mejor la letra a mano; gpt-5-mini es más barato. Si uno no te funciona, prueba otro."},
+    "Claude": {"id": "anthropic", "secret": "ANTHROPIC_API_KEY", "models": ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5"], "where": "console.anthropic.com",
+               "help": "Opus lee mejor la letra a mano; Haiku es el más barato."},
+}
 
 
 def secret(name, default=""):
     try:
-        return st.secrets.get(name, default)
+        return st.secrets.get(name, default) or os.environ.get(name, default)
     except Exception:
         return os.environ.get(name, default)
 
 
 with st.sidebar:
     st.subheader("Ajustes")
-    key = secret("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY", "")
+    names = list(PROVIDERS)
+    default = 1 if (secret("ANTHROPIC_API_KEY") and not secret("OPENAI_API_KEY")) else 0
+    pname = st.radio("Qué IA lee las fotos", names, index=default, horizontal=True)
+    prov = PROVIDERS[pname]
+    key = secret(prov["secret"])
     if key:
-        st.success("Clave de la API configurada.")
+        st.success(f"Clave de {pname} configurada.")
     else:
-        key = st.text_input("Clave de la API de Claude", type="password", help="Se consigue en console.anthropic.com. Solo se usa para leer las fotos.")
-    model = st.selectbox("Modelo para leer las fotos", MODELS, index=0, help="Opus lee mejor la letra a mano; Haiku es el más barato.")
+        key = st.text_input(f"Clave de la API de {pname}", type="password", help=f"Se consigue en {prov['where']}. Solo se usa para leer las fotos.")
+    model = st.selectbox("Modelo", prov["models"] + ["Otro…"], index=0, help=prov["help"])
+    if model == "Otro…":
+        model = st.text_input("Nombre exacto del modelo", placeholder="ej.: gpt-5")
     st.divider()
     st.caption("Las canciones se guardan en la carpeta `songs/` de la app. En Streamlit Cloud esa carpeta se borra al reiniciar: descarga una copia de seguridad de vez en cuando (pestaña «Llevar en el móvil»).")
 
@@ -83,12 +94,12 @@ def label(row):
 
 
 def transcribe(images, title_hint=""):
-    if not key:
-        st.error("Falta la clave de la API de Claude. Escríbela en la barra lateral (en el móvil, la flecha arriba a la izquierda).")
+    if not key or not model:
+        st.error(f"Falta la clave de la API de {pname}. Escríbela en la barra lateral (en el móvil, la flecha arriba a la izquierda).")
         return None
     with st.spinner("Leyendo la hoja… con letra a mano tarda uno o dos minutos."):
         try:
-            song, doubts = lib.read_sheet(images, key, model, title_hint)
+            song, doubts = lib.read_sheet(images, key, model, title_hint, prov["id"])
         except lib.ReadError as e:
             st.error(str(e))
             return None
@@ -119,8 +130,8 @@ with tab_saved:
         if row.get("song"):
             viewer(row["song"])
         else:
-            st.warning("Esta hoja aún no está pasada a limpio. Pulsa el botón para que Claude la lea.")
-            if st.button("✨ Pasar a limpio con Claude", type="primary", use_container_width=True, disabled=not photos):
+            st.warning("Esta hoja aún no está pasada a limpio. Pulsa el botón para que la IA la lea.")
+            if st.button("✨ Pasar a limpio", type="primary", use_container_width=True, disabled=not photos):
                 res = transcribe([lib.photo_bytes(p) for p in photos], row.get("title", ""))
                 if res:
                     song, doubts = res
@@ -188,7 +199,7 @@ with tab_saved:
                     flash("success", "Cambios guardados.")
                     st.rerun()
                 if row.get("song") and photos:
-                    if st.button("🔄 Volver a leer la foto con Claude"):
+                    if st.button("🔄 Volver a leer la foto"):
                         res = transcribe([lib.photo_bytes(p) for p in photos], row.get("title", ""))
                         if res:
                             row["song"] = res[0]
