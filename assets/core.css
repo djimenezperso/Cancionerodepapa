@@ -1,4 +1,3 @@
-
 /* Layout: a ruled notebook sheet is the hero — beat number, note and syllable stacked per column, like Papá writes them. */
 :root{
   --bg:#e9edf2; --sheet:#ffffff; --ink:#1d2129; --muted:#5d6675; --line:#d6dce5; --rule:#dfe7f3; --margin:#f1c9c4;
@@ -45,3 +44,22 @@ html,body{background:var(--bg);color:var(--ink)}
 .sv-general{border-top:1px dashed var(--line);padding-top:.8em;margin-top:.4em;display:flex;flex-wrap:wrap;gap:8px}
 .sv-general .cue{font-size:.85em}
 .sv-empty{color:var(--muted);font-size:16px}
+/* partitura */
+.score{display:flex;flex-direction:column;gap:2px}
+.score .sv-meta{margin-bottom:10px}
+.score svg.sys{display:block;max-width:100%;overflow:visible}
+.score svg.sys line,.score svg.sys path{stroke:var(--ink)}
+.score svg.sys .staff{stroke:var(--muted)}
+.score .fillink{fill:var(--ink);stroke:none}
+.score .head{fill:var(--ink);stroke:var(--ink)}
+.score .head.hollow{fill:none}
+.score .acc{font-family:"Segoe UI Symbol","Noto Sans Symbols 2","DejaVu Sans","Apple Symbols",serif;font-size:19px;fill:var(--ink)}
+.score .ts{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:23px;fill:var(--ink)}
+.score .small{font-family:Georgia,serif;font-size:11px;fill:var(--ink)}
+.score .lyr{font-family:var(--f-text);font-size:15px;fill:var(--ink)}
+.score .cueTxt{font-family:var(--f-hand);font-size:14px;fill:var(--cue)}
+.score .breath{font-family:Georgia,serif;font-size:22px;fill:var(--ink)}
+.score .hl{fill:var(--hl)}
+.score .sn.now .head{fill:var(--beat-odd);stroke:var(--beat-odd)}
+.score .sn.now line,.score .sn.now path{stroke:var(--beat-odd)}
+.score-note{font-size:13px;color:var(--muted);margin:10px 0 0}
