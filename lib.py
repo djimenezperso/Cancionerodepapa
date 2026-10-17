@@ -72,6 +72,10 @@ def normalize(x: dict | None) -> dict:
                         nu[k] = True
                 if u.get("x"):
                     nu["x"] = str(u["x"])[:4]
+                for k in ("pos", "e"):
+                    v = _num(u.get(k))
+                    if v is not None:
+                        nu[k] = round(v, 4)
                 if nu["t"] or nu["n"]:
                     nl["units"].append(nu)
             if nl["units"] or nl["cues"]:
@@ -86,6 +90,45 @@ def _int(v):
         return int(v)
     except Exception:
         return None
+
+
+def _num(v):
+    try:
+        f = float(v)
+        return f if f == f else None  # descarta NaN
+    except Exception:
+        return None
+
+
+def apply_rhythm(song: dict, result: dict) -> dict:
+    """Aplica el ritmo marcado (posición exacta de cada sílaba en pulsos) a la canción."""
+    song = json.loads(json.dumps(song))
+    m = beats_per_bar(song.get("ts"))
+    items = result.get("items") or []
+    i = 0
+    for sec in song.get("sections") or []:
+        for line in sec.get("lines") or []:
+            for u in line.get("units") or []:
+                it = items[i] if i < len(items) else {}
+                i += 1
+                pos = _num(it.get("pos"))
+                for k in ("pos", "e", "u"):
+                    u.pop(k, None)
+                if pos is None:
+                    u.pop("b", None)
+                    continue
+                u["pos"] = round(pos, 4)
+                e = _num(it.get("e"))
+                if e is not None:
+                    u["e"] = round(e, 4)
+                if abs(pos - round(pos)) < 1e-6:
+                    u["b"] = int(round(pos)) % m + 1
+                else:
+                    u.pop("b", None)
+    t = _int(result.get("tempo"))
+    if t:
+        song["tempo"] = max(30, min(240, t))
+    return normalize(song)
 
 
 def slug(text: str) -> str:
@@ -473,6 +516,8 @@ def song_to_rows(song: dict) -> tuple[list[dict], list[dict]]:
                         "subrayado": bool(u.get("acc")),
                         "pausa": bool(u.get("pause")),
                         "círculo": u.get("x", ""),
+                        "inicio": u.get("pos"),
+                        "fin": u.get("e"),
                     }
                 )
     return units, lines
@@ -508,6 +553,8 @@ def rows_to_song(meta: dict, units: list[dict], lines: list[dict]) -> dict:
                 "acc": bool(clean(r.get("subrayado"))),
                 "pause": bool(clean(r.get("pausa"))),
                 "x": str(clean(r.get("círculo")) or ""),
+                "pos": _num(clean(r.get("inicio"))),
+                "e": _num(clean(r.get("fin"))),
             }
         )
     info = {}
