@@ -323,6 +323,7 @@ CÓMO DEVOLVERLO:
 - Cada línea se divide en "units": una por cada palabra, o por cada sílaba cuando dentro de una palabra hay varias notas en sílabas distintas (termina la sílaba con guion: "e-", "ter-", "ni-", "ty"). Cada unidad lleva solo las notas escritas encima de ella; si una palabra no tiene nota encima, "n": [].
 - Escribe la letra en minúsculas normales (mayúscula solo al principio del verso y en nombres), tal y como está escrita, sin corregirla ni traducirla.
 - "ts": el compás ("2/4", "3/4", "4/4", "6/8" o "12/8"). Dedúcelo del número de tiempo más alto que use y de las pistas de la hoja; si reconoces la canción por el título, úsalo para confirmarlo.
+- TIEMPOS Y ANACRUSA: si la hoja trae números de tiempo, respétalos tal cual. Si en algún verso NO hay números, propón tú "b" en las sílabas que caen en tiempo, colocando el tiempo 1 (el golpe fuerte) en la sílaba acentuada de la frase. Muchas canciones empiezan en ANACRUSA: las primeras sílabas van antes del primer tiempo fuerte (por ejemplo, en "and I love you so" el 1 cae en "love" o en "so", no en "and"), así que esas sílabas iniciales llevan tiempos como 3 o 4 del compás anterior. Si reconoces la canción, usa cómo se canta de verdad para decidir dónde cae el 1.
 - "tempo": negras por minuto aproximadas (si reconoces la canción, su velocidad habitual; si no, 80).
 - "doubts": lista corta de cosas que no se leían bien (ejemplo: "verso 3: ¿Sib o Si?"). Vacía si todo está claro.
 
@@ -533,7 +534,8 @@ def rows_to_song(meta: dict, units: list[dict], lines: list[dict]) -> dict:
 
 
 def _assets():
-    return (ASSETS / "core.css").read_text("utf-8"), (ASSETS / "core.js").read_text("utf-8"), (ASSETS / "viewer.js").read_text("utf-8")
+    core = (ASSETS / "core.js").read_text("utf-8") + "\n" + (ASSETS / "score.js").read_text("utf-8")
+    return (ASSETS / "core.css").read_text("utf-8"), core, (ASSETS / "viewer.js").read_text("utf-8")
 
 
 FONTS = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Kalam:wght@400;700&display=swap">'
