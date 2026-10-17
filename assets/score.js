@@ -120,6 +120,7 @@ function rest(g,x,d,whole){
 function drawNote(g,x,it,octUp){
   var n=it.note,pos=posOf(n,octUp),y=yOf(pos),base=it.d,dotted=[3,6,12].indexOf(base)>=0,core=dotted?base*2/3:base;
   var grp=E("g",{"class":"sn"+(it.mark?" mk":""),"data-p":it.path||""},g);
+  var upS=pos<34; E("rect",{x:x-12,y:upS?y-38:y-10,width:24,height:48,"class":"hit"},grp); // zona para tocar con el dedo
   if(it.mark) E("rect",{x:x-9,y:y-7,width:18,height:14,rx:3,"class":"hl"},grp);
   // líneas adicionales
   for(var p=28;p>=pos;p-=2) E("line",{x1:x-10,x2:x+10,y1:yOf(p),y2:yOf(p),"stroke-width":"1.2"},grp);
