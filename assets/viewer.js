@@ -226,19 +226,17 @@ function oneHere(){
 function restEditor(){
   var u=unitAt(selPath),ed=document.createElement("div"); ed.className="ed";
   var top=document.createElement("div"); top.className="r";
-  top.append(sp("Silencio detrás de «"+(u.t||"")+"»","t"),sp(u.r?durText(u.r).replace(/ \(.*$/,""):(u.e?"(hueco hasta la siguiente)":"(hueco)"),"lbl"));
+  top.append(sp("Silencio detrás de «"+(u.t||"")+"»","t"),sp(u.r?durText(u.r).replace(/ \(.*$/,""):"(hueco)","lbl"),
+    b("🗑 Quitar",function(){ delete u.r; delete u.e; delete u.pos; selRest=false; changed(); },"pri"),
+    b("✕",function(){ selRest=false; selPath=null; selPaths=[]; show(); },"","Cerrar"));
+  if(dirty) top.append(b("💾",save,"pri","Guardar"));
   ed.append(top);
-  var r=document.createElement("div"); r.className="r";
-  r.append(sp("Cambiar a:","lbl"));
+  var r=document.createElement("div"); r.className="r"; r.append(sp("Cambiar a:","lbl"));
   DSHORT.forEach(function(d){ r.append(b(d[0],function(){ u.r=d[1]; delete u.e; changed(); })); });
   ed.append(r);
-  var r2=document.createElement("div"); r2.className="r";
-  r2.append(b("🗑 Quitar silencio",function(){ delete u.r; delete u.e; delete u.pos; selRest=false; changed(); },"pri"),
-    b("Ver la nota «"+(u.t||"")+"»",function(){ selRest=false; show(); }),
-    b("Cerrar",function(){ selRest=false; selPath=null; selPaths=[]; show(); }));
-  if(dirty) r2.append(b("💾 Guardar",save,"pri"));
+  var r2=document.createElement("div"); r2.className="r"; r2.append(sp("Añadir:","lbl"));
+  DSHORT.forEach(function(d){ r2.append(b("+"+d[0],function(){ u.r=Math.round(((u.r||0)+d[1])*1000)/1000; delete u.e; changed(); })); });
   ed.append(r2);
-  var h=document.createElement("p"); h.className="help"; h.textContent="El silencio va pegado a la nota de antes. Si quitas uno que salía porque faltaba alguna duración, la nota de antes se alarga hasta la siguiente."; ed.append(h);
   return ed;
 }
 function el2(c){ var e=document.createElement("span"); e.className=c; return e; }
@@ -369,7 +367,7 @@ function dictPanel(){
   var live=document.createElement("p"); live.id="dict-live"; live.className="live"; live.textContent=dict.interim?"… "+dict.interim:(dict.last?"":"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…"); d.append(live);
   if(dict.last){ var la=document.createElement("p"); la.className="done"; la.textContent="✔ "+dict.last; d.append(la); }
   if(showHelp){ var h=document.createElement("p"); h.className="help";
-    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». «Bien» deja la nota igual y pasa a la siguiente. «Separar» parte la palabra en sílabas (una nota en cada una) y «unir» la junta con la siguiente. «Una sola nota» deja una sola nota en esa sílaba (o «quitar nota» quita la nota marcada). «Cuatro corcheas» pone corchea a las 4 siguientes («tres bien» salta tres). «Guardar» guarda los cambios. Silencios: «silencio de negra» (va detrás de la nota que acabas de decir), «Fa negra, silencio de corchea», «quitar silencio». Otras: «anterior», «ir a love», «tiempo uno», «deshacer».";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». «Bien» deja la nota igual y pasa a la siguiente. «Añadir silencio de negra» suma un silencio detrás; «añadir Fa negra» mete una nota nueva a la derecha. «Separar» parte la palabra en sílabas (una nota en cada una) y «unir» la junta con la siguiente. «Una sola nota» deja una sola nota en esa sílaba (o «quitar nota» quita la nota marcada). «Cuatro corcheas» pone corchea a las 4 siguientes («tres bien» salta tres). «Guardar» guarda los cambios. Silencios: «silencio de negra» (va detrás de la nota que acabas de decir), «Fa negra, silencio de corchea», «quitar silencio». Otras: «anterior», «ir a love», «tiempo uno», «deshacer».";
     d.append(h); }
   return d;
 }
@@ -423,7 +421,7 @@ function runCmd(raw){
 function applyTokens(w,raw){
   var s=S[st.i],paths=allPaths(); if(!selPath) selPath=paths[0];
   var snapshot={song:JSON.parse(JSON.stringify(s)),sel:selPath};
-  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false,single=0;
+  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false,single=0,addMode=false;
   for(var i=0;i<w.length;i++){
     var x=w[i];
     if(x==="deshacer"||x==="deshaz"){ undoCmd(); return false; }
@@ -438,6 +436,7 @@ function applyTokens(w,raw){
     if(x==="igual"||x==="misma"||x==="mismo"){ keep=true; continue; }
     if(x==="borrar"||x==="quitar"){ clear=true; continue; }
     if(x==="tiempo"&&w[i+1]){ var bn=NUMW[w[i+1]]||parseInt(w[i+1],10); if(bn){ beat=bn; i++; } continue; }
+    if(x==="anadir"||x==="añadir"||x==="anade"||x==="añade"||x==="mas"||x==="agrega"||x==="agregar"||x==="pon"||x==="poner"){ addMode=true; continue; }
     if(x==="silencio"){ var j=i+1; if(w[j]==="de") j++; if(DURW[w[j]]){ var rv=DURW[w[j]]; if(w[j+1]==="con"&&w[j+2]==="puntillo"){ rv*=1.5; j+=2; } else if(w[j+1]==="puntillo"){ rv*=1.5; j++; } rest=rv; i=j; } else rest=1; continue; }
     if(DURW[x]){ var dv=DURW[x]; if(w[i+1]==="con"&&w[i+2]==="puntillo"){ dv*=1.5; i+=2; } else if(w[i+1]==="puntillo"||w[i+1]==="punto"){ dv*=1.5; i++; } dur+=dv; hasDur=true; continue; }
     if(NOTEW[x]){
@@ -459,6 +458,17 @@ function applyTokens(w,raw){
     var keepN=single===1?u.n[0]:null;
     if(single===1) u.n=[keepN]; else u.n.splice(Math.min(selNote,u.n.length-1),1);
     selNote=0; changedSome=true; did.push("una sola nota: "+u.n.join("-"));
+  }
+  if(addMode&&notes.length){
+    var ap=selPath.split(".").map(Number),line=s.sections[ap[0]].lines[ap[1]];
+    var nu={t:"",n:notes.map(function(nt){ return fmt({l:nt.l,a:nt.a,o:nt.o===null?(parse((u.n||[])[0]).o):nt.o}); })};
+    if(hasDur) nu.d=Math.round(dur*1000)/1000;
+    if(u.r&&!selRest){ nu.r=u.r; delete u.r; } // con una nota marcada, la nueva va pegada a ella; con un silencio marcado, va detrás del silencio
+    line.units.splice(ap[2]+1,0,nu);
+    dict.undo.push(snapshot); dirty=true; beep(nu.n[0]);
+    selPath=ap[0]+"."+ap[1]+"."+(ap[2]+1); selPaths=[selPath]; selRest=false; lastApplied=selPath;
+    dict.last="Añadida "+nu.n.join("-")+(nu.d?" "+durText(nu.d).replace(/ \(.*$/,""):"")+" detrás de «"+(u.t||"")+"»";
+    return;
   }
   var melis=(u.n||[]).length>1&&notes.length<=1; // palabra con varias notas: se dicta nota a nota dentro de ella
   if(melis&&selNote>=(u.n||[]).length) selNote=0;
@@ -482,8 +492,9 @@ function applyTokens(w,raw){
   if(rest!==null){
     // un silencio dicho solo va detrás de la nota que se acaba de dictar
     var target=u,onlyRest=!notes.length&&!hasDur&&beat===null&&!clear;
-    if(onlyRest&&lastApplied&&paths.indexOf(lastApplied)===paths.indexOf(selPath)-1){ target=unitAt(lastApplied); }
-    if(rest>0){ target.r=rest; did.push("silencio de "+durText(rest).replace(/ \(.*$/,"")+" detrás de «"+(target.t||"")+"»"); }
+    if(onlyRest&&!selRest&&lastApplied&&paths.indexOf(lastApplied)===paths.indexOf(selPath)-1){ target=unitAt(lastApplied); }
+    if(rest>0&&addMode){ target.r=Math.round(((target.r||0)+rest)*1000)/1000; did.push("añadido silencio de "+durText(rest).replace(/ \(.*$/,"")+" detrás de «"+(target.t||"")+"»"); }
+    else if(rest>0){ target.r=rest; did.push("silencio de "+durText(rest).replace(/ \(.*$/,"")+" detrás de «"+(target.t||"")+"»"); }
     else { delete target.r; did.push("sin silencio detrás de «"+(target.t||"")+"»"); }
     changedSome=true; if(target!==u){ u=target; }
   }
