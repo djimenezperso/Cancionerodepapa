@@ -21,17 +21,37 @@ Se abre en http://localhost:8501. Para verla en el móvil en la misma wifi, abre
 
 ## Publicarla gratis (Streamlit Community Cloud)
 
-1. Crea un repositorio **privado** en GitHub (las fotos de las hojas van dentro) y sube esta carpeta tal cual.
+1. Crea un repositorio **privado** en GitHub y sube esta carpeta tal cual.
 2. Entra en https://share.streamlit.io con tu cuenta de GitHub → **Create app** → elige el repositorio, rama `main` y archivo `app.py`.
-3. En **Advanced settings → Secrets** pega tu clave de OpenAI:
-   `OPENAI_API_KEY = "sk-..."`
-   (si un día usas Claude: `ANTHROPIC_API_KEY = "sk-ant-..."`)
-4. Pulsa **Deploy**. Te dará un enlace que puedes abrir en el móvil (y guardarlo en la pantalla de inicio).
+3. En **Advanced settings → Secrets** (o después en **⋮ → Settings → Secrets**) pega:
 
-La clave de OpenAI se crea en https://platform.openai.com/api-keys (la cuenta necesita saldo). Leer una hoja cuesta unos céntimos. En la barra lateral de la app puedes elegir el modelo.
+```toml
+OPENAI_API_KEY = "sk-..."
+GITHUB_TOKEN = "github_pat_..."
+GITHUB_REPO = "tu-usuario/cancionerodepapa"
+```
+
+4. Pulsa **Deploy**.
+
+### Para que las canciones no se borren
+
+Las canciones nuevas se guardan solas en la rama `datos` de tu repositorio (la app la crea sola la primera vez). Para eso necesita un token de GitHub:
+
+1. GitHub → tu foto (arriba a la derecha) → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
+2. Nombre: `cancionero`. Caducidad: la más larga que te deje (o «No expiration»).
+3. **Repository access** → **Only select repositories** → elige `cancionerodepapa`.
+4. **Permissions** → **Repository permissions** → **Contents** → **Read and write**.
+5. **Generate token**, cópialo y ponlo en Secrets como `GITHUB_TOKEN`.
+
+En la pestaña «Llevar en el móvil → Copia de seguridad» la app dice si el guardado en GitHub funciona.
+
+### Opcional
+
+- `OPENAI_MODEL = "gpt-5-mini"` para usar un modelo más barato (por defecto `gpt-5`).
+- Con Claude en lugar de OpenAI: `ANTHROPIC_API_KEY = "sk-ant-..."`.
 
 ## A tener en cuenta
 
-- En Streamlit Cloud las canciones que se guardan nuevas se pierden cuando la app se reinicia (pasa tras días sin uso o al actualizar el código). Usa «Llevar en el móvil → Descargar copia» de vez en cuando y «Recuperar una copia» si hace falta. Las que estén subidas en `songs/` del repositorio no se pierden nunca.
+- Sin `GITHUB_TOKEN`, las canciones nuevas se pierden cuando la app se reinicia.
 - Con canciones muy conocidas, la IA puede negarse a transcribir la letra entera. En ese caso, escribe la letra en «Nueva canción → Escribir la letra» y pon las notas en la tabla de «Corregir».
 - La cámara integrada de Streamlit es pequeña; en el móvil suele ir mejor «Galería», que deja usar la cámara normal del teléfono.
