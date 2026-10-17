@@ -45,11 +45,20 @@ else:
 
 
 @st.cache_resource(show_spinner="Cargando canciones…")
-def sync_store(token, repo):
-    return lib.gh_sync(token, repo)
+def sync_store(token, repo, attempt=0):
+    import time
+
+    err = lib.gh_sync(token, repo)
+    for _ in range(2):  # reintento si GitHub falla justo al arrancar
+        if not err:
+            break
+        time.sleep(2)
+        err = lib.gh_sync(token, repo)
+    return err
 
 
-SYNC_ERR = sync_store(secret("GITHUB_TOKEN"), secret("GITHUB_REPO"))
+st.session_state.setdefault("sync_attempt", 0)
+SYNC_ERR = sync_store(secret("GITHUB_TOKEN"), secret("GITHUB_REPO"), st.session_state.sync_attempt)
 if not lib.gh_enabled():  # el proceso se reutiliza entre visitas: se reactiva sin volver a descargar
     lib.GH.update(token=secret("GITHUB_TOKEN").strip(), repo=secret("GITHUB_REPO").strip().strip("/"))
 
@@ -427,6 +436,9 @@ with tab_go:
     with st.expander("Copia de seguridad"):
         if lib.gh_enabled() and not SYNC_ERR:
             st.success("Las canciones se guardan solas en GitHub y no se pierden al reiniciar.")
+        if lib.gh_enabled() and st.button("🔄 Recargar las canciones desde GitHub", key="resync", help="Vuelve a descargar todas las canciones guardadas en GitHub."):
+            st.session_state.sync_attempt += 1
+            st.rerun()
         elif SYNC_ERR:
             st.error("No se puede guardar en GitHub: " + SYNC_ERR)
         else:
