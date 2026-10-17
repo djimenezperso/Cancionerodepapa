@@ -347,7 +347,7 @@ function dictPanel(){
   var live=document.createElement("p"); live.id="dict-live"; live.className="live"; live.textContent=dict.interim?"… "+dict.interim:(dict.last?"":"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…"); d.append(live);
   if(dict.last){ var la=document.createElement("p"); la.className="done"; la.textContent="✔ "+dict.last; d.append(la); }
   if(showHelp){ var h=document.createElement("p"); h.className="help";
-    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». «Bien» deja la nota igual y pasa a la siguiente. «Separar» parte la palabra en sílabas (una nota en cada una) y «unir» la junta con la siguiente. «Cuatro corcheas» pone corchea a las 4 siguientes («tres bien» salta tres). «Guardar» guarda los cambios. Silencios: «silencio de negra» (va detrás de la nota que acabas de decir), «Fa negra, silencio de corchea», «quitar silencio». Otras: «anterior», «ir a love», «tiempo uno», «deshacer».";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». «Bien» deja la nota igual y pasa a la siguiente. «Separar» parte la palabra en sílabas (una nota en cada una) y «unir» la junta con la siguiente. «Una sola nota» deja una sola nota en esa sílaba (o «quitar nota» quita la nota marcada). «Cuatro corcheas» pone corchea a las 4 siguientes («tres bien» salta tres). «Guardar» guarda los cambios. Silencios: «silencio de negra» (va detrás de la nota que acabas de decir), «Fa negra, silencio de corchea», «quitar silencio». Otras: «anterior», «ir a love», «tiempo uno», «deshacer».";
     d.append(h); }
   return d;
 }
@@ -401,12 +401,14 @@ function runCmd(raw){
 function applyTokens(w,raw){
   var s=S[st.i],paths=allPaths(); if(!selPath) selPath=paths[0];
   var snapshot={song:JSON.parse(JSON.stringify(s)),sel:selPath};
-  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false;
+  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false,single=0;
   for(var i=0;i<w.length;i++){
     var x=w[i];
     if(x==="deshacer"||x==="deshaz"){ undoCmd(); return false; }
     if(x==="separar"||x==="separa"||x==="dividir"||x==="divide"||x==="partir"||x==="parte"){ var pre=JSON.parse(JSON.stringify(s)),ns=splitUnit(selPath); if(ns){ dict.undo.push({song:pre,sel:selPath}); dirty=true; dict.last="Separada en "+ns+" sílabas"; } else dict.last="No sé separar «"+(unitAt(selPath).t||"")+"»"; return; }
     if(x==="unir"||x==="une"||x==="junta"||x==="juntar"){ var pre2=JSON.parse(JSON.stringify(s)); if(joinUnit(selPath)){ dict.undo.push({song:pre2,sel:selPath}); dirty=true; dict.last="Unida con la siguiente"; } return; }
+    if((x==="una"&&(w[i+1]==="nota"||w[i+1]==="sola"))||(x==="solo"&&w[i+1]==="una")){ single=1; i++; while(w[i+1]==="nota"||w[i+1]==="sola"||w[i+1]==="una") i++; continue; }
+    if((x==="quitar"||x==="borrar"||x==="quita"||x==="borra")&&w[i+1]==="nota"){ single=2; i++; continue; }
     if(OKW[x]||x==="adelante"){ nav=1; continue; }
     if((x==="quitar"||x==="borrar")&&(w[i+1]==="silencio"||(w[i+1]==="el"&&w[i+2]==="silencio"))){ rest=0; i+=w[i+1]==="el"?2:1; continue; }
     if(x==="anterior"||x==="atras"||x==="volver"){ nav=-1; continue; }
@@ -431,6 +433,11 @@ function applyTokens(w,raw){
     return; }
   var u=unitAt(selPath),changedSome=false;
   if(clear){ delete u.d; delete u.r; changedSome=true; did.push("sin duración"); }
+  if(single&&(u.n||[]).length>1){
+    var keepN=single===1?u.n[0]:null;
+    if(single===1) u.n=[keepN]; else u.n.splice(Math.min(selNote,u.n.length-1),1);
+    selNote=0; changedSome=true; did.push("una sola nota: "+u.n.join("-"));
+  }
   var melis=(u.n||[]).length>1&&notes.length<=1; // palabra con varias notas: se dicta nota a nota dentro de ella
   if(melis&&selNote>=(u.n||[]).length) selNote=0;
   if(notes.length===1&&!keep&&melis){
