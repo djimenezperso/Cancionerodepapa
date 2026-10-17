@@ -116,6 +116,19 @@ window.CORE=(function(){
     if(gen.length){ var g=el("div","sv-general"); gen.forEach(function(c){g.appendChild(el("span","cue",c));}); sv.appendChild(g); }
     return sv;
   }
+  /* sonido de piano sencillo: armónicos con ataque rápido que se van apagando, y un filtro que lo suaviza */
+  function pianoNote(ctx,out,f,s,dur){
+    var len=Math.min(3.2,Math.max(0.5,dur+0.35)),lp=ctx.createBiquadFilter(),g=ctx.createGain();
+    lp.type="lowpass"; lp.frequency.setValueAtTime(Math.min(9000,f*9),s); lp.frequency.exponentialRampToValueAtTime(Math.max(400,f*2.2),s+len);
+    g.gain.setValueAtTime(0.0001,s); g.gain.exponentialRampToValueAtTime(0.32,s+0.006); g.gain.exponentialRampToValueAtTime(0.12,s+0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001,s+len);
+    if(dur+0.12<len){ g.gain.setTargetAtTime(0.0001,s+dur+0.05,0.08); } // al soltar la tecla
+    lp.connect(g); g.connect(out);
+    [[1,1,0],[2,0.45,3],[3,0.22,-4],[4,0.12,2],[5,0.06,0]].forEach(function(h){
+      var os=ctx.createOscillator(),hg=ctx.createGain(); os.type="sine"; os.frequency.value=f*h[0]; os.detune.value=h[2];
+      hg.gain.value=h[1]*(h[0]>1?Math.exp(-(h[0]-1)*f/2500):1); os.connect(hg); hg.connect(lp); os.start(s); os.stop(s+len+0.05);
+    });
+  }
   function Player(){
     var ctx=null,raf=0,self=this; this.playing=false;
     this.stop=function(){ self.playing=false; cancelAnimationFrame(raf); if(ctx){ try{ctx.close();}catch(e){} ctx=null; } if(self.onEnd) self.onEnd(); };
@@ -139,6 +152,7 @@ window.CORE=(function(){
           var d=(it.end-it.start)/ns.length;
           ns.forEach(function(p,ix){
             var s=T(it.start+ix*d),dur=Math.max(0.12,d*spb*0.94),f=440*Math.pow(2,(p.midi+k-69)/12);
+            if(o.piano){ pianoNote(ctx,master,f,s,dur); return; }
             [[1,"triangle",0.16],[2,"sine",0.04]].forEach(function(h){
               var os=ctx.createOscillator(),g=ctx.createGain(); os.type=h[1]; os.frequency.value=f*h[0];
               g.gain.setValueAtTime(0.0001,s); g.gain.exponentialRampToValueAtTime(h[2],s+0.03); g.gain.exponentialRampToValueAtTime(h[2]*0.55,s+Math.min(0.4,dur*0.5));
@@ -159,5 +173,5 @@ window.CORE=(function(){
       return true;
     };
   }
-  return {render:render,timeline:timeline,Player:Player,parseNote:parseNote,beatsPerBar:beatsPerBar};
+  return {render:render,timeline:timeline,Player:Player,pianoNote:pianoNote,parseNote:parseNote,beatsPerBar:beatsPerBar};
 })();
