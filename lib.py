@@ -76,6 +76,10 @@ def normalize(x: dict | None) -> dict:
                     nds = [_num(v) for v in u["nd"]]
                     if all(v and v > 0 for v in nds):
                         nu["nd"] = [round(v, 4) for v in nds]
+                if isinstance(u.get("rec"), list):
+                    rec = sorted({int(i) for i in u["rec"] if isinstance(i, (int, float)) and 0 <= int(i) < len(nu["n"])})
+                    if rec:
+                        nu["rec"] = rec
                 for k in ("pos", "e", "d", "r"):
                     v = _num(u.get(k))
                     if v is not None:
