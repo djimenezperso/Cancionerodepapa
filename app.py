@@ -235,7 +235,7 @@ def tools_panel(row, sel):
     if photos and st.button("🔄 Volver a leer la hoja", key=f"reread-{sel}", use_container_width=True, help="La IA vuelve a leer la foto desde cero (se pierden los cambios hechos a mano)."):
         res = transcribe(photos, row.get("title", ""))
         if res:
-            st.session_state.pending = {"song": res[0], "doubts": res[1], "images": photos, "target": sel}
+            autosave_reading(res[0], res[1], photos, sel)
             st.rerun()
     st.caption("Calcula cuánto dura cada nota (negra, corchea…) para dibujar la partitura. Si ya lo hiciste, vuelve a calcularlo todo desde cero: solo úsalo si las duraciones salen muy mal, porque borra las que hayas puesto a mano." if has_dur else "Calcula cuánto dura cada nota (negra, corchea…) para poder dibujar la partitura.")
     st.markdown("**🎤 Corregir hablando**")
@@ -273,44 +273,67 @@ def tools_panel(row, sel):
             st.rerun()
 
 
-# --------------------------------------------------------------------------- revisión antes de guardar
+def autosave_reading(song, doubts, images, target=None):
+    """Guarda la lectura nada más terminar y abre la revisión (ya guardada)."""
+    err = None
+    prev = None
+    if target:
+        row = lib.get_song(target) or {}
+        prev = row.get("song")
+        row.update(song=song, title=song["title"] or row.get("title", ""), page=song.get("page") or row.get("page", ""))
+        _, err = safe(lib.save_song, row, target)
+        sid = target
+    else:
+        photos, err = safe(lib.store_photos, images, song["title"])
+        sid, err2 = safe(lib.save_song, {"title": song["title"], "page": song.get("page", ""), "photos": photos or [], "song": song})
+        err = err or err2
+    st.session_state.pending = {"song": song, "doubts": doubts, "images": images, "target": sid, "prev": prev, "new": not target, "err": err}
+    st.session_state.sel = sid
+    st.session_state.view = "song"
+
+
+# --------------------------------------------------------------------------- revisión (ya guardada)
 
 pend = st.session_state.pending
 if pend:
-    st.subheader("👀 Revisa que esté bien")
-    st.write("Compara la hoja con la versión limpia. Si está bien, pulsa **Aceptar**. Si hay algún fallo pequeño, acéptala y luego corrígelo en «Corregir».")
+    st.subheader("👀 Revisa la hoja")
+    if pend.get("err"):
+        st.warning("Guardada aquí, pero no en GitHub: " + pend["err"])
+    else:
+        st.success("✅ Ya está guardada. Compárala con la hoja y corrige lo que haga falta (los cambios también se guardan).")
     if pend.get("doubts"):
         st.warning("Cosas que no se leían bien: " + " · ".join(pend["doubts"]))
     edited = side_by_side(pend["images"], pend["song"], "pend", editable=True)
     if edited:
         pend["song"] = edited
+        row = lib.get_song(pend["target"]) or {}
+        row.update(song=edited, title=edited["title"], page=edited.get("page", ""))
+        _, pend["err"] = safe(lib.save_song, row, pend["target"])
         st.rerun()
     b1, b2, b3 = st.columns(3)
-    if b1.button("✅ Aceptar y guardar", type="primary", use_container_width=True, key="pend-ok"):
-        song = pend["song"]
-        err = None
-        if pend.get("target"):
-            row = lib.get_song(pend["target"]) or {}
-            row.update(song=song, title=song["title"] or row.get("title", ""), page=song.get("page") or row.get("page", ""))
-            sid, err = safe(lib.save_song, row, pend["target"])
-            sid = pend["target"]
-        else:
-            photos, err = safe(lib.store_photos, pend["images"], song["title"])
-            if photos is None:
-                photos = []
-            sid, err2 = safe(lib.save_song, {"title": song["title"], "page": song.get("page", ""), "photos": photos, "song": song})
-            err = err or err2
-        st.session_state.pending = None
-        st.session_state.sel = sid
+    if b1.button("👍 Listo", type="primary", use_container_width=True, key="pend-ok"):
+        st.session_state.sel = pend["target"]
         st.session_state.view = "song"
-        flash("warning" if err else "success", ("Guardada aquí, pero no en GitHub: " + err) if err else "Guardada en «Canciones guardadas».")
+        st.session_state.pending = None
         st.rerun()
     if b2.button("🔄 Volver a leer la hoja", use_container_width=True, key="pend-again"):
         res = transcribe(pend["images"], pend["song"].get("title", ""))
         if res:
-            pend["song"], pend["doubts"] = res
+            prev, new = pend.get("prev"), pend.get("new")
+            autosave_reading(res[0], res[1], pend["images"], pend["target"])
+            st.session_state.pending.update(prev=prev, new=new)
             st.rerun()
     if b3.button("🗑️ Descartar", use_container_width=True, key="pend-drop"):
+        if pend.get("new"):
+            _, err = safe(lib.delete_song, pend["target"])
+            st.session_state.sel = None
+            st.session_state.view = "lib"
+            flash("info", "Lectura descartada.")
+        else:
+            row = lib.get_song(pend["target"]) or {}
+            row["song"] = pend.get("prev")
+            _, err = safe(lib.save_song, row, pend["target"])
+            flash("info", "Se ha dejado la versión anterior.")
         st.session_state.pending = None
         st.rerun()
     st.divider()
@@ -361,7 +384,7 @@ with tab_saved:
             if st.button("✨ Pasar a limpio esta hoja", type="primary", use_container_width=True, disabled=not photos, key=f"read-{sel}"):
                 res = transcribe(photos, row.get("title", ""))
                 if res:
-                    st.session_state.pending = {"song": res[0], "doubts": res[1], "images": photos, "target": sel}
+                    autosave_reading(res[0], res[1], photos, sel)
                     st.rerun()
             for im in photos:
                 st.image(im, use_container_width=True)
@@ -410,7 +433,7 @@ with tab_new:
         if go and images:
             res = transcribe(images, title_hint)
             if res:
-                st.session_state.pending = {"song": res[0], "doubts": res[1], "images": images, "target": None}
+                autosave_reading(res[0], res[1], images, None)
                 st.rerun()
     else:
         t = st.text_input("Título", key="mt")
