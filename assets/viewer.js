@@ -22,13 +22,18 @@ css.textContent=
  "background-image:linear-gradient(90deg,transparent 16px,var(--margin) 16px,var(--margin) 18px,transparent 18px),repeating-linear-gradient(180deg,transparent 0 31px,var(--rule) 31px 32px)}"+
  ".editing [data-p]{cursor:pointer} .editing .u:hover{background:var(--rule)} .editing .sn:hover .head{fill:var(--beat-odd)}"+
  ".sel{background:var(--now)!important;outline:2px solid var(--beat-odd);outline-offset:1px;border-radius:6px} .sn.sel .head{fill:var(--beat-odd);stroke:var(--beat-odd)}"+
- ".ed{position:relative;z-index:3;margin-bottom:12px;background:var(--sheet);border:2px solid var(--beat-odd);border-radius:12px;padding:12px;margin-top:12px;display:flex;flex-direction:column;gap:10px;box-shadow:0 -4px 16px rgb(0 0 0 / .12)}"+
+ ".ed{position:relative;z-index:3;background:var(--sheet);border:2px solid var(--beat-odd);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;box-shadow:0 -4px 16px rgb(0 0 0 / .12)}"+
+ ".ed button{font-size:13px!important;padding:3px 8px!important;min-height:32px!important;border-radius:7px!important}"+
+ ".ed .sepv{width:1px;align-self:stretch;background:var(--line);margin:0 2px}"+
+ ".ed .live{font-size:14px;color:var(--muted);min-height:1.2em;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"+
+ ".ed .done{font-size:14px;font-weight:700;color:var(--beat-even);margin:0}"+
+ ".ed .help{font-size:13px;color:var(--muted);margin:0}"+
  ".ed .r{display:flex;flex-wrap:wrap;gap:6px;align-items:center}"+
- ".ed .t{font-weight:700;font-size:17px}"+
+ ".ed .t{font-weight:700;font-size:15px}"+
  ".ed button.on{background:var(--beat-odd);color:var(--sheet);border-color:var(--beat-odd)}"+
  ".ed button.nchip{color:var(--note);font-family:var(--f-hand);font-size:18px}"+
  ".ed button.nchip.on{background:var(--note);border-color:var(--note);color:var(--sheet)}"+
- ".ed .big{font-family:var(--f-hand);font-weight:700;font-size:30px;color:var(--note);min-width:3.2em;text-align:center}"+
+ ".ed .big{font-family:var(--f-hand);font-weight:700;font-size:22px;color:var(--note);min-width:2.6em;text-align:center}"+
  ".ed select,.ed input{font:inherit;font-size:16px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--bg);color:var(--ink);min-height:40px}"+
  ".ed input{width:9em}";
 css.textContent+=
@@ -43,18 +48,22 @@ css.textContent+=
  ".lay.wide .ed select,.lay.wide .ed input{width:100%}"+
  ".lay.wide .hint{margin:0}"+
  ".lay:not(.wide) .side{position:sticky;top:0;z-index:4;background:var(--bg)}"+
+ ".lay:not(.wide) .rbar{gap:4px;padding:6px 0;margin-bottom:8px}"+
+ ".lay:not(.wide) .rbar button{font-size:13px;padding:3px 8px;min-height:34px}"+
+ ".lay:not(.wide) .rbar .grp{display:inline-flex;gap:3px;align-items:center}"+
  ".lay .bottom{position:sticky;bottom:0;z-index:4;background:var(--bg);padding-top:6px}"+
- ".lay .bottom .ed{max-height:46vh;overflow:auto;margin:0}";
+ ".lay .bottom .ed{max-height:34vh;overflow:auto;margin:0}";
 document.head.appendChild(css);
 
 var NAMES=["Do","Re","Mi","Fa","Sol","La","Si"],SH=["Do","Do#","Re","Re#","Mi","Fa","Fa#","Sol","Sol#","La","La#","Si"],FL=["Do","Reb","Re","Mib","Mi","Fa","Solb","Sol","Lab","La","Sib","Si"];
 var DURS=[["redonda",4],["blanca con puntillo",3],["blanca",2],["negra con puntillo",1.5],["negra",1],["corchea con puntillo",0.75],["corchea",0.5],["semicorchea",0.25]];
+var DSHORT=[["Redonda",4],["Blanca·",3],["Blanca",2],["Negra·",1.5],["Negra",1],["Corchea·",0.75],["Corchea",0.5],["Semi",0.25]];
 var st=window.__vst||(window.__vst={i:-1,k:0,size:22,bpm:80,click:true,mel:true,score:false,edit:false});
 var PREF="cdp-visor-v1";
 try{ var sv=JSON.parse(localStorage.getItem(PREF)||"{}"); ["score","size","click","mel","edit"].forEach(function(k){ if(k in sv) st[k]=sv[k]; }); }catch(e){}
 function savePrefs(){ try{ localStorage.setItem(PREF,JSON.stringify({score:st.score,size:st.size,click:st.click,mel:st.mel,edit:st.edit})); }catch(e){} }
 var dict={on:false,rec:null,interim:"",last:"",undo:[],err:""};
-var S,pl=window.__vpl||(window.__vpl=new CORE.Player()),root=document.getElementById("app"),lastEl=null,dirty=false,selPath=null,selNote=0;
+var S,pl=window.__vpl||(window.__vpl=new CORE.Player()),root=document.getElementById("app"),lastEl=null,dirty=false,selPath=null,selNote=0,selPaths=[],multi=false,ligar=false,showHelp=false;
 
 function b(t,f,c,lab){ var e=document.createElement("button"); e.type="button"; e.textContent=t; e.onclick=f; if(c) e.className=c; if(lab) e.setAttribute("aria-label",lab); return e; }
 function sp(t,c){ var e=document.createElement("span"); e.className=c||"v"; e.textContent=t; return e; }
@@ -106,16 +115,36 @@ function show(){
   if(st.score&&window.SCORE){ pg.classList.add("plain"); SCORE.render(s,pg,{transpose:st.k}); }
   else CORE.render(s,pg,{transpose:st.k});
   if(st.edit&&!st.k){
-    pg.addEventListener("click",function(e){ var t=e.target.closest("[data-p]"); if(!t||!t.dataset.p) return; selPath=t.dataset.p; selNote=0; show(); });
+    pg.addEventListener("click",function(e){ var t=e.target.closest("[data-p]"); if(!t||!t.dataset.p) return;
+      var p=t.dataset.p;
+      if(multi&&selPath){ var all=allPaths(),a=all.indexOf(selPath),z=all.indexOf(p); selPaths=all.slice(Math.min(a,z),Math.max(a,z)+1); }
+      else { selPath=p; selPaths=[p]; }
+      selNote=0; show(); });
     if(selPath&&dict.on){ pg.querySelectorAll('[data-p="'+selPath+'"]').forEach(function(x){x.classList.add("sel"); setTimeout(function(){ x.scrollIntoView({block:"center",behavior:"smooth"}); },30);}); }
     else if(selPath){
-      var se=pg.querySelectorAll('[data-p="'+selPath+'"]'); se.forEach(function(x){x.classList.add("sel");});
-      var ed=editor(s); panel.appendChild(ed);
+      if(!selPaths.length||selPaths.indexOf(selPath)<0) selPaths=[selPath];
+      var se=[]; selPaths.forEach(function(sp2){ pg.querySelectorAll('[data-p="'+sp2+'"]').forEach(function(x){ x.classList.add("sel"); se.push(x); }); });
+      var ed=selPaths.length>1?multiEditor(s):editor(s); panel.appendChild(ed);
       if(!wide&&se.length) setTimeout(function(){ se[0].scrollIntoView({block:"center",behavior:"smooth"}); },30);
     }
   }
   root.scrollTop=keepScroll;
   if(!window.EMBEDDED){ try{ navigator.wakeLock&&navigator.wakeLock.request("screen").catch(function(){}); }catch(e){} }
+}
+function durRow(apply,cur){
+  var r=document.createElement("div"); r.className="r";
+  r.append(sp(cur!==undefined?("Duración: "+(cur?durText(cur):"—")):"Duración:","lbl"));
+  DSHORT.forEach(function(d){ var bt=b(d[0],function(){ apply(d[1],ligar); ligar=false; changed(); }); bt.title=DURS.filter(function(x){return x[1]===d[1];})[0][0]; r.append(bt); });
+  r.append(b(ligar?"+ ligar ✓":"+ ligar",function(){ ligar=!ligar; show(); },ligar?"on":""),b("✕",function(){ apply(null); changed(); },"","Quitar duración"));
+  return r;
+}
+function navRow(){
+  var r=document.createElement("div"); r.className="r";
+  r.append(b("◀",function(){ move(-1); },"","Anterior"),b("▶",function(){ move(1); },"","Siguiente"),
+    b(multi?"Varias ✓":"Varias",function(){ multi=!multi; if(!multi){ selPaths=[selPath]; } show(); },multi?"on":""),
+    b("Cerrar",function(){ selPath=null; selPaths=[]; multi=false; show(); }));
+  if(dirty) r.append(b("💾 Guardar",save,"pri"));
+  return r;
 }
 function editor(s){
   var u=unitAt(selPath),M=CORE.beatsPerBar(s.ts),ed=document.createElement("div"); ed.className="ed";
@@ -123,47 +152,47 @@ function editor(s){
   var top=document.createElement("div"); top.className="r";
   top.append(sp("«"+(u.t||"")+"»","t"));
   u.n.forEach(function(n,i){ top.append(b(n,function(){ selNote=i; show(); },"nchip"+(i===selNote?" on":""))); });
-  top.append(b("+ nota",function(){ u.n.push(u.n.length?u.n[u.n.length-1]:"Do"); selNote=u.n.length-1; changed(); }));
-  if(u.n.length) top.append(b("Quitar nota",function(){ u.n.splice(selNote,1); selNote=0; changed(); }));
+  top.append(b("+",function(){ u.n.push(u.n.length?u.n[u.n.length-1]:"Do"); selNote=u.n.length-1; changed(); },"","Añadir nota a esta sílaba"));
+  if(u.n.length>1) top.append(b("−",function(){ u.n.splice(selNote,1); selNote=0; changed(); },"","Quitar esta nota"));
+  var bsel=document.createElement("select"); bsel.setAttribute("aria-label","Tiempo"); bsel.append(new Option("T: —",""));
+  for(var i=1;i<=M;i++) bsel.append(new Option("T: "+i,String(i))); bsel.value=u.b?String(u.b):"";
+  bsel.onchange=function(){ if(bsel.value) u.b=+bsel.value; else delete u.b; delete u.pos; changed(); };
+  bsel.style.width="auto"; top.append(bsel);
   ed.append(top);
   if(u.n.length){
     var p=parse(u.n[selNote]);
-    function setp(np){ u.n[selNote]=fmt(np); beep(u.n[selNote]); changed(); }
+    var setp=function(np){ u.n[selNote]=fmt(np); beep(u.n[selNote]); changed(); };
     var r1=document.createElement("div"); r1.className="r";
     NAMES.forEach(function(nm){ r1.append(b(nm,function(){ setp({l:nm,a:p.a,o:p.o}); },p.l===nm?"on":"")); });
+    r1.append(el2("sepv"));
+    [["","♮"],["#","♯"],["b","♭"]].forEach(function(a){ r1.append(b(a[1],function(){ setp({l:p.l,a:a[0],o:p.o}); },p.a===a[0]?"on":"")); });
     ed.append(r1);
     var r2=document.createElement("div"); r2.className="r";
-    [["",'natural'],["#","♯ sostenido"],["b","♭ bemol"]].forEach(function(a){ r2.append(b(a[1],function(){ setp({l:p.l,a:a[0],o:p.o}); },p.a===a[0]?"on":"")); });
-    r2.append(sp(fmt(p),"big"));
-    r2.append(b("▼ medio tono",function(){ setp(fromMidi(midiOf(p)-1,false)); }),b("▲ medio tono",function(){ setp(fromMidi(midiOf(p)+1,true)); }));
+    r2.append(sp(fmt(p),"big"),b("▼",function(){ setp(fromMidi(midiOf(p)-1,false)); },"","Bajar medio tono"),b("▲",function(){ setp(fromMidi(midiOf(p)+1,true)); },"","Subir medio tono"),
+      el2("sepv"),sp("Oct.","lbl"),b("−",function(){ setp({l:p.l,a:p.a,o:Math.max(1,p.o-1)}); },"","Octava más baja"),sp(String(p.o)),b("+",function(){ setp({l:p.l,a:p.a,o:Math.min(7,p.o+1)}); },"","Octava más alta"),
+      b("🔊",function(){ beep(u.n[selNote]); },"","Oír la nota"));
     ed.append(r2);
-    var r3=document.createElement("div"); r3.className="r";
-    r3.append(sp("Octava","lbl"),b("−",function(){ setp({l:p.l,a:p.a,o:Math.max(1,p.o-1)}); },"","Octava más baja"),sp(String(p.o)),b("+",function(){ setp({l:p.l,a:p.a,o:Math.min(7,p.o+1)}); },"","Octava más alta"),b("🔊 Oír",function(){ beep(u.n[selNote]); }));
-    ed.append(r3);
   }
-  var r4=document.createElement("div"); r4.className="r";
-  var bsel=document.createElement("select"); bsel.setAttribute("aria-label","Tiempo"); bsel.append(new Option("Tiempo: —",""));
-  for(var i=1;i<=M;i++) bsel.append(new Option("Tiempo: "+i,String(i))); bsel.value=u.b?String(u.b):"";
-  bsel.onchange=function(){ if(bsel.value) u.b=+bsel.value; else delete u.b; delete u.pos; changed(); };
-  var txt=document.createElement("input"); txt.value=u.t||""; txt.setAttribute("aria-label","Sílaba");
-  txt.onchange=function(){ u.t=txt.value; changed(); };
-  r4.append(bsel,sp("Sílaba","lbl"),txt);
-  ed.append(r4);
-  // duración: se tocan figuras y se suman (ligaduras)
-  var r6=document.createElement("div"); r6.className="r";
-  r6.append(sp("Duración: "+(u.d?durText(u.d):"sin poner"),"t"));
-  ed.append(r6);
-  var r7=document.createElement("div"); r7.className="r";
-  r7.append(sp(u.d?"Sumar (ligar):":"Elige:","lbl"));
-  DURS.forEach(function(d){ r7.append(b(d[0],function(){ u.d=Math.round(((u.d||0)+d[1])*100)/100; changed(); })); });
-  if(u.d) r7.append(b("Borrar duración",function(){ delete u.d; changed(); }));
-  ed.append(r7);
-  var r5=document.createElement("div"); r5.className="r";
-  r5.append(b("◀ Anterior",function(){ move(-1); }),b("Siguiente ▶",function(){ move(1); }),b("Cerrar",function(){ selPath=null; show(); }));
-  if(dirty) r5.append(b("💾 Guardar cambios",save,"pri"));
-  ed.append(r5);
+  ed.append(durRow(function(v,add){ if(v===null){ delete u.d; return; } u.d=add&&u.d?Math.round((u.d+v)*100)/100:v; },u.d||0));
+  ed.append(navRow());
   return ed;
 }
+function multiEditor(s){
+  var ed=document.createElement("div"),units=selPaths.map(unitAt); ed.className="ed";
+  var top=document.createElement("div"); top.className="r";
+  top.append(sp(units.length+" notas: «"+(units[0].t||"")+"» … «"+(units[units.length-1].t||"")+"»","t"));
+  ed.append(top);
+  function shiftAll(k){ units.forEach(function(u){ u.n=(u.n||[]).map(function(n){ var p=parse(n); return fmt(fromMidi(midiOf(p)+k,k>0)); }); }); changed(); }
+  function octAll(k){ units.forEach(function(u){ u.n=(u.n||[]).map(function(n){ var p=parse(n); p.o=Math.max(1,Math.min(7,p.o+k)); return fmt(p); }); }); changed(); }
+  var r=document.createElement("div"); r.className="r";
+  r.append(sp("Todas:","lbl"),b("▼ medio tono",function(){ shiftAll(-1); }),b("▲ medio tono",function(){ shiftAll(1); }),el2("sepv"),b("Octava −",function(){ octAll(-1); }),b("Octava +",function(){ octAll(1); }));
+  ed.append(r);
+  ed.append(durRow(function(v,add){ units.forEach(function(u){ if(v===null) delete u.d; else u.d=add&&u.d?Math.round((u.d+v)*100)/100:v; }); }));
+  var h=document.createElement("p"); h.className="help"; h.textContent="Con «Varias» activado, toca la primera y la última nota del trozo."; ed.append(h);
+  ed.append(navRow());
+  return ed;
+}
+function el2(c){ var e=document.createElement("span"); e.className=c; return e; }
 function durText(v){
   // descompone en figuras para mostrarlo: 5.5 → "redonda + negra con puntillo"
   var out=[],left=v; DURS.forEach(function(d){ while(left>=d[1]-1e-6){ out.push(d[0]); left=Math.round((left-d[1])*1000)/1000; } });
@@ -171,7 +200,7 @@ function durText(v){
 }
 function move(dir){
   var all=[],s=S[st.i]; s.sections.forEach(function(sec,si){ sec.lines.forEach(function(l,li){ l.units.forEach(function(u,ui){ all.push(si+"."+li+"."+ui); }); }); });
-  var i=all.indexOf(selPath)+dir; if(i>=0&&i<all.length){ selPath=all[i]; selNote=0; show(); }
+  var i=all.indexOf(selPath)+dir; if(i>=0&&i<all.length){ selPath=all[i]; selPaths=[selPath]; selNote=0; show(); }
 }
 function changed(){ dirty=true; show(); }
 
@@ -196,18 +225,16 @@ function stopDict(){ dict.on=false; if(dict.rec){ try{ dict.rec.stop(); }catch(e
 function dictPanel(){
   var d=document.createElement("div"); d.className="ed";
   var r1=document.createElement("div"); r1.className="r";
-  r1.append(sp("🎙 Escuchando…","t"));
-  if(selPath){ var u=unitAt(selPath); r1.append(sp("Ahora: «"+(u.t||"")+"» "+((u.n||[]).join("-")||"—")+(u.d?" · "+durText(u.d):""),"lbl")); }
+  var u=selPath?unitAt(selPath):null;
+  r1.append(sp("🎙","t"),sp(u?("«"+(u.t||"")+"» "+((u.n||[]).join("-")||"—")+(u.d?" · "+durText(u.d).replace(/ \(.*$/,""):"")):"","t"));
+  r1.append(el2("sepv"),b("◀",function(){ move(-1); },"","Anterior"),b("▶",function(){ move(1); },"","Siguiente"),b("↩",undoCmd,"","Deshacer"),b("?",function(){ showHelp=!showHelp; show(); },showHelp?"on":"","Ayuda"));
+  if(dirty) r1.append(b("💾 Guardar",save,"pri"));
   d.append(r1);
-  var live=document.createElement("p"); live.id="dict-live"; live.className="lbl"; live.textContent=dict.interim?"… "+dict.interim:""; d.append(live);
-  if(dict.last){ var la=document.createElement("p"); la.className="t"; la.textContent="✔ "+dict.last; d.append(la); }
-  var r2=document.createElement("div"); r2.className="r";
-  r2.append(b("◀ Anterior",function(){ move(-1); }),b("Siguiente ▶",function(){ move(1); }),b("↩ Deshacer",undoCmd));
-  if(dirty) r2.append(b("💾 Guardar cambios",save,"pri"));
-  d.append(r2);
-  var h=document.createElement("p"); h.className="lbl";
-  h.textContent="Di nota y figura y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «redonda ligada a negra con puntillo», «igual corchea». También: «siguiente», «anterior», «ir a love», «silencio de negra», «tiempo uno», «deshacer».";
-  d.append(h);
+  var live=document.createElement("p"); live.id="dict-live"; live.className="live"; live.textContent=dict.interim?"… "+dict.interim:(dict.last?"":"Habla: «Fa negra», «Sol corchea»…"); d.append(live);
+  if(dict.last){ var la=document.createElement("p"); la.className="done"; la.textContent="✔ "+dict.last; d.append(la); }
+  if(showHelp){ var h=document.createElement("p"); h.className="help";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra, Sol negra». Otras: «siguiente», «anterior», «ir a love», «silencio de negra», «tiempo uno», «deshacer».";
+    d.append(h); }
   return d;
 }
 var NUMW={uno:1,un:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,doce:12};
