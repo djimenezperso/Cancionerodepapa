@@ -176,6 +176,7 @@ function editor(s){
   top.append(sp("«"+(u.t||"")+"»","t"));
   u.n.forEach(function(n,i){ top.append(b(n,function(){ selNote=i; show(); },"nchip"+(i===selNote?" on":""))); });
   top.append(b("🗑",function(){ delSelected(); show(); },"","Eliminar esta nota"));
+  top.append(b("+ Palabra",addWordAsk,"","Añadir una palabra a la derecha"));
   top.append(b("✂ Separar",function(){ if(splitUnit(selPath)){ selPaths=[selPath]; changed(); } },"","Separar la palabra en sílabas, una nota en cada una"),
     b("Unir ▶",function(){ if(joinUnit(selPath)) changed(); },"","Unir con la sílaba siguiente"));
   top.append(b("+",function(){ u.n.push(u.n.length?u.n[u.n.length-1]:"Do"); delete u.nd; selNote=u.n.length-1; changed(); },"","Añadir nota a esta sílaba"));
@@ -184,6 +185,10 @@ function editor(s){
   for(var i=1;i<=M;i++) bsel.append(new Option("T: "+i,String(i))); bsel.value=u.b?String(u.b):"";
   bsel.onchange=function(){ if(bsel.value) u.b=+bsel.value; else delete u.b; delete u.pos; changed(); };
   bsel.style.width="auto"; top.append(bsel);
+  var txt=document.createElement("input"); txt.value=u.t||""; txt.setAttribute("aria-label","Sílaba"); txt.placeholder="Sílaba"; txt.style.width="7em";
+  txt.onchange=function(){ u.t=txt.value; changed(); };
+  txt.onkeydown=function(e){ if(e.key==="Enter"){ e.preventDefault(); txt.blur(); } };
+  top.append(txt);
   ed.append(top);
   if(u.n.length){
     var p=parse(u.n[selNote]);
@@ -385,12 +390,28 @@ function dictPanel(){
   live.textContent=dict.interim?"… "+dict.interim:(dict.last?"✔ "+dict.last:"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…");
   d.append(live);
   if(showHelp){ var h=document.createElement("p"); h.className="help";
-    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra». «Bien» deja la nota igual. «Cuatro corcheas» pone corchea a las 4 siguientes. «Añadir silencio de negra», «añadir Fa negra». «Cinco notas» pone 5 notas en la sílaba marcada y luego las dices una a una. «Octava arriba» / «octava abajo» sube o baja la nota marcada una octava («medio tono arriba/abajo» también). «Eliminar» borra lo marcado (un silencio, una nota o la sílaba entera). «Separar», «unir», «una sola nota». «Silencio de negra», «quitar silencio», «anterior», «ir a love», «deshacer», «guardar».";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra». «Bien» deja la nota igual. «Cuatro corcheas» pone corchea a las 4 siguientes. «Añadir silencio de negra», «añadir Fa negra». «Añadir palabra can» mete esa palabra a la derecha y luego le dices su nota. «Cinco notas» pone 5 notas en la sílaba marcada y luego las dices una a una. «Octava arriba» / «octava abajo» sube o baja la nota marcada una octava («medio tono arriba/abajo» también). «Eliminar» borra lo marcado (un silencio, una nota o la sílaba entera). «Separar», «unir», «una sola nota». «Silencio de negra», «quitar silencio», «anterior», «ir a love», «deshacer», «guardar».";
     d.append(h); }
   return d;
 }
 var DELW={eliminar:1,elimina:1,eliminalo:1,eliminala:1,borrar:1,borra:1,borralo:1,borrala:1,quitar:1,quita:1,quitalo:1,quitala:1,suprimir:1,suprime:1,fuera:1,sobra:1};
 /* «eliminar»: borra lo que está marcado (un silencio, una de las notas de la sílaba o la sílaba entera) */
+/* «añadir palabra can»: mete una sílaba nueva a la derecha de la marcada (o del silencio marcado) y la deja marcada para dictarle la nota */
+function addWordAsk(){
+  // sin cuadros emergentes: se añade «…» y queda marcada para escribirle el texto en «Sílaba»
+  addWord("…"); dict.last=""; show();
+  setTimeout(function(){ var inp=document.querySelector('.ed input[aria-label="Sílaba"]'); if(inp){ inp.focus(); inp.select(); } },50);
+}
+function addWord(txt,snapshot){
+  var s=S[st.i],a=selPath.split(".").map(Number),line=s.sections[a[0]].lines[a[1]],u=line.units[a[2]];
+  var nu={t:txt,n:[(u.n||["Do"])[(u.n||[]).length-1]||"Do"]};
+  if(u.r&&!selRest){ nu.r=u.r; delete u.r; }
+  line.units.splice(a[2]+1,0,nu);
+  dict.undo.push(snapshot||{song:JSON.parse(JSON.stringify(s)),sel:selPath}); dirty=true;
+  selPath=a[0]+"."+a[1]+"."+(a[2]+1); selPaths=[selPath]; selRest=false; selNote=0; lastApplied=null;
+  dict.last="Añadida la palabra «"+txt+"». Ahora dime su nota (por ejemplo «Fa corchea»)";
+  return false;
+}
 /* duración de cada nota dentro de una sílaba con varias notas (nd) y total (d) */
 function setNoteDur(u,ix,v){
   var n=(u.n||[]).length; if(n<2){ u.d=v; return; }
@@ -447,6 +468,9 @@ function runCmd(raw){
   w=ex;
   // trocear en órdenes: tras una figura, una nota nueva (o «igual») empieza la sílaba siguiente
   var segs=[],cur=[],seenDur=false;
+  var pw=w.indexOf("palabra"); if(pw<0) pw=w.indexOf("silaba");
+  if(pw>0&&/^(anadir|añadir|anade|añade|agrega|agregar|pon|poner|mas|la|una|un|el)$/.test(w[pw-1])){ var pre=w.slice(0,pw-1); while(pre.length&&/^(anadir|añadir|anade|añade|agrega|agregar|pon|poner|mas|la|una|un|el)$/.test(pre[pre.length-1])) pre.pop();
+    if(pre.length) runCmd(pre.join(" ")); applyTokens(["añadir"].concat(w.slice(pw)),raw); show(); return; }
   for(var i=0;i<w.length;i++){
     var x=w[i],isNote=!!NOTEW[x]||/^(do|re|mi|fa|sol|la|si)(#|b)?([1-7])?$/.test(x)||x==="igual"||x==="misma"||x==="mismo";
     if(OKW[x]||/^(separar|separa|dividir|divide|partir|parte|unir|une|junta|juntar)$/.test(x)){ if(cur.length) segs.push(cur); segs.push([x]); cur=[]; seenDur=false; continue; }
@@ -501,7 +525,14 @@ function applyTokens(w,raw){
       return delSelected(snapshot);
     }
     if(x==="tiempo"&&w[i+1]){ var bn=NUMW[w[i+1]]||parseInt(w[i+1],10); if(bn){ beat=bn; i++; } continue; }
-    if(x==="anadir"||x==="añadir"||x==="anade"||x==="añade"||x==="mas"||x==="agrega"||x==="agregar"||x==="pon"||x==="poner"){ addMode=true; continue; }
+    if(x==="anadir"||x==="añadir"||x==="anade"||x==="añade"||x==="mas"||x==="agrega"||x==="agregar"||x==="pon"||x==="poner"){
+      var nxw=w[i+1]; if(nxw==="la"||nxw==="el"||nxw==="una"||nxw==="un") nxw=w[i+2];
+      if(nxw==="palabra"||nxw==="silaba"||nxw==="sílaba"||nxw==="letra"){
+        var from=w.indexOf(nxw,i)+1,txt=w.slice(from).join(" ");
+        if(txt) return addWord(txt,snapshot);
+        dict.last="Dime qué palabra: «añadir palabra can»"; return;
+      }
+      addMode=true; continue; }
     if(x==="silencio"){ var j=i+1; if(w[j]==="de") j++; if(DURW[w[j]]){ var rv=DURW[w[j]]; if(w[j+1]==="con"&&w[j+2]==="puntillo"){ rv*=1.5; j+=2; } else if(w[j+1]==="puntillo"){ rv*=1.5; j++; } rest=rv; i=j; } else rest=1; continue; }
     if(DURW[x]){ var dv=DURW[x]; if(w[i+1]==="con"&&w[i+2]==="puntillo"){ dv*=1.5; i+=2; } else if(w[i+1]==="puntillo"||w[i+1]==="punto"){ dv*=1.5; i++; } dur+=dv; hasDur=true; continue; }
     if(NOTEW[x]){
