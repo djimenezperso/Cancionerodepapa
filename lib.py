@@ -189,6 +189,15 @@ def slug(text: str) -> str:
 GH = {"token": "", "repo": "", "branch": "datos", "shas": {}, "error": "", "last": 0.0}
 
 
+def clean_repo(repo: str) -> str:
+    """Acepta «usuario/repo», la dirección web completa o la de clonar (.git)."""
+    r = (repo or "").strip().strip('"').strip("'")
+    r = re.sub(r"^(https?://)?(www\.)?github\.com/", "", r)
+    r = re.sub(r"\.git$", "", r).strip("/")
+    parts = r.split("/")
+    return "/".join(parts[:2]) if len(parts) >= 2 else r
+
+
 def gh_enabled() -> bool:
     return bool(GH["token"] and GH["repo"])
 
@@ -228,7 +237,7 @@ def _blob_sha(data: bytes) -> str:
 
 def gh_sync(token: str, repo: str) -> str:
     """Prepara GitHub y trae a la carpeta local las canciones guardadas. Devuelve '' o un aviso."""
-    GH.update(token=token.strip(), repo=repo.strip().strip("/"), error="")
+    GH.update(token=token.strip(), repo=clean_repo(repo), error="")
     if not gh_enabled():
         return ""
     try:
