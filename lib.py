@@ -109,17 +109,34 @@ def dur_label(v):
     v = _num(v)
     if v is None:
         return None
+    parts, left = [], v
     for n, x in DURATIONS:
-        if abs(x - v) < 1e-6:
-            return f"{n} ({x:g})"
-    return f"{v:g} pulsos"
+        while left >= x - 1e-6:
+            parts.append(n)
+            left = round(left - x, 4)
+    return " + ".join(parts) + f" ({v:g})" if parts and left < 1e-6 else f"{v:g} pulsos"
 
 
 def dur_value(label):
+    """Admite «negra (1)», «1.5», «4+1.5» o «redonda + negra con puntillo»."""
     if label is None or label == "":
         return None
-    m = re.search(r"\(([\d.]+)\)|^([\d.]+)", str(label))
-    return _num(m.group(1) or m.group(2)) if m else None
+    total, found = 0.0, False
+    for part in re.split(r"\+", str(label)):
+        part = part.strip().lower().replace(",", ".")
+        if not part:
+            continue
+        m = re.search(r"\(([\d.]+)\)", part) or re.fullmatch(r"([\d.]+)(?:\s*pulsos?)?", part)
+        if m:
+            total += float(m.group(1))
+            found = True
+            continue
+        for name, v in sorted(DURATIONS, key=lambda x: -len(x[0])):
+            if part.startswith(name):
+                total += v
+                found = True
+                break
+    return round(total, 4) if found and total > 0 else None
 
 
 def apply_rhythm(song: dict, result: dict) -> dict:
@@ -576,6 +593,85 @@ def estimate_rhythm(song: dict, api_key: str, model: str, provider: str) -> dict
                     u.pop("r", None)
                 i += 1
     return normalize(new)
+
+
+VOICE_PROMPT = """Eres el ayudante de un cancionero de canto. Abajo está la canción, sílaba a sílaba, numerada, con su nota, el tiempo del compás donde cae, su duración en pulsos y el silencio que va detrás. Después viene lo que la persona ha dicho en voz alta para corregirla.
+
+Convierte lo que ha dicho en cambios concretos:
+- Identifica cada sílaba por su texto y su posición (si una palabra se repite, usa el contexto: "la segunda vez que dice love", "en el estribillo"...).
+- Notas en solfeo: Do, Re, Mi, Fa, Sol, La, Si, con # (sostenido) o b (bemol); número de octava solo si lo dice ("Re 4" → "Re4").
+- Duraciones en pulsos: redonda 4, blanca con puntillo 3, blanca 2, negra con puntillo 1.5, negra 1, corchea con puntillo 0.75, corchea 0.5, semicorchea 0.25, tresillo de corcheas 1/3 cada una. "Ligada a" o "más" suma: "redonda ligada a negra con puntillo" = 5.5.
+- "Silencio de negra después" → "r": 1. Tiempo del compás → "b".
+- Si dice algo como "de love a so todas negras", aplica a todas las sílabas de ese tramo.
+- No cambies nada que no haya pedido.
+
+Responde solo con JSON:
+{"cambios":[{"i":numero_de_silaba,"n":["Fa"],"d":5.5,"r":0,"b":1,"t":"texto"}],"resumen":["frase corta por cada cambio, en español"],"no_entendido":"lo que no hayas podido aplicar, o vacío"}
+Incluye en cada cambio solo los campos que cambian.
+
+Compás: %s
+Canción:
+%s
+
+Lo que ha dicho:
+«%s»"""
+
+
+def transcribe_voice(audio: bytes, api_key: str, filename: str = "voz.wav") -> str:
+    import openai
+
+    client = openai.OpenAI(api_key=api_key)
+    last = None
+    for model in ("gpt-4o-transcribe", "whisper-1"):
+        try:
+            r = client.audio.transcriptions.create(model=model, file=(filename, audio), language="es")
+            return (r.text or "").strip()
+        except openai.APIError as e:
+            last = e
+    raise ReadError(f"No se ha podido pasar la voz a texto: {last}")
+
+
+def voice_changes(song: dict, said: str, api_key: str, model: str, provider: str) -> tuple[dict, list[str], str]:
+    """Interpreta las correcciones dichas en voz alta. Devuelve (canción nueva, resumen, lo no entendido)."""
+    flat = [u for sec in song.get("sections", []) for line in sec.get("lines", []) for u in line.get("units", [])]
+    rows = []
+    for i, u in enumerate(flat, 1):
+        rows.append(
+            f"{i}. «{u.get('t', '')}» nota: {'-'.join(u.get('n') or []) or '—'}"
+            f" | tiempo: {u.get('b', '—')} | duración: {u.get('d', '—')} | silencio: {u.get('r', 0)}"
+        )
+    text = _complete_text(VOICE_PROMPT % (song.get("ts", "4/4"), "\n".join(rows), said), api_key, model, provider)
+    try:
+        data = _parse_json(text)
+    except Exception as e:
+        raise ReadError("No he entendido la respuesta. Prueba a decirlo otra vez.") from e
+    new = json.loads(json.dumps(song))
+    nflat = [u for sec in new.get("sections", []) for line in sec.get("lines", []) for u in line.get("units", [])]
+    for c in data.get("cambios") or []:
+        i = _int(c.get("i"))
+        if not i or not (1 <= i <= len(nflat)):
+            continue
+        u = nflat[i - 1]
+        if isinstance(c.get("n"), list):
+            u["n"] = [str(x).strip() for x in c["n"] if str(x).strip()]
+        elif isinstance(c.get("n"), str) and c["n"].strip():
+            u["n"] = [x.strip() for x in re.split(r"\s*[-–]\s*", c["n"]) if x.strip()]
+        for k in ("d", "r"):
+            v = _num(c.get(k))
+            if v is not None:
+                if v > 0:
+                    u[k] = v
+                else:
+                    u.pop(k, None)
+        b = _int(c.get("b"))
+        if b:
+            u["b"] = b
+        if isinstance(c.get("t"), str) and c["t"].strip():
+            u["t"] = c["t"]
+        u.pop("pos", None)
+        u.pop("e", None)
+    summary = [str(x) for x in data.get("resumen") or [] if str(x).strip()]
+    return normalize(new), summary, str(data.get("no_entendido") or "").strip()
 
 
 def song_from_text(title: str, ts: str, lyrics: str) -> dict:
