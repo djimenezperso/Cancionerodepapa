@@ -447,7 +447,8 @@ function fixAcc(w){
     var x=w[i];
     if((x==="be"||x==="ve"||x==="b")&&w[i+1]==="mol"){ out.push("bemol"); i++; continue; }
     if(/^(vemol|bemoll|bemoles|bemol|bmol|bemos|vemos)$/.test(x)&&(x!=="vemos"||NOTEW[w[i-1]])&&(x!=="bemos"||NOTEW[w[i-1]])){ out.push("bemol"); continue; }
-    if((x==="b"||x==="be")&&NOTEW[w[i-1]]){ out.push("bemol"); continue; }
+    if((x==="b"||x==="be")&&(NOTEW[w[i-1]]||i===0)){ out.push("bemol"); continue; }
+    if(x==="mol"&&(i===0||out[out.length-1]==="bemol")){ if(out[out.length-1]!=="bemol") out.push("bemol"); continue; }
     if(/^(sostenido|sostenida|sostenidos|sostenidas|sostendo|sostenio)$/.test(x)){ out.push("sostenido"); continue; }
     if(x==="#"&&NOTEW[w[i-1]]){ out.push("sostenido"); continue; }
     if(x==="becuadro"||x==="becuadros"||x==="natural"||x==="naturales"){ out.push("natural"); continue; }
@@ -529,7 +530,7 @@ function applyTokens(w,raw){
   }
   var s=S[st.i],paths=allPaths(); if(!selPath) selPath=paths[0];
   var snapshot={song:JSON.parse(JSON.stringify(s)),sel:selPath};
-  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false,single=0,addMode=false,melCount=0;
+  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false,single=0,addMode=false,melCount=0,strayAcc=null;
   for(var i=0;i<w.length;i++){
     var x=w[i];
     if(x==="deshacer"||x==="deshaz"){ undoCmd(); return false; }
@@ -570,6 +571,7 @@ function applyTokens(w,raw){
       else if(w[i+1]==="octava"&&w[i+2]&&(NUMW[w[i+2]]||/^[1-7]$/.test(w[i+2]))){ nt.o=NUMW[w[i+2]]||+w[i+2]; i+=2; }
       notes.push(nt); continue;
     }
+    if((x==="bemol"||x==="sostenido"||x==="natural")&&!notes.length){ strayAcc=x==="bemol"?"b":x==="sostenido"?"#":""; continue; }
     var mm=x.match(/^(do|re|mi|fa|sol|la|si)(#|b)?([1-7])?$/); if(mm){ notes.push({l:NOTEW[mm[1]],a:mm[2]||"",o:mm[3]?+mm[3]:null}); continue; }
   }
   if(go){ var idx=paths.indexOf(selPath),found=null;
@@ -578,6 +580,10 @@ function applyTokens(w,raw){
     return; }
   var u=unitAt(selPath),changedSome=false;
   if(clear){ delete u.d; delete u.r; changedSome=true; did.push("sin duración"); }
+  if(strayAcc!==null&&!notes.length&&(u.n||[]).length){
+    var ixS=u.n.length>1?Math.min(selNote,u.n.length-1):0,pS=parse(u.n[ixS]); pS.a=strayAcc; u.n[ixS]=fmt(pS);
+    changedSome=true; did.push(u.n[ixS]);
+  }
   if(melCount){
     var base=(u.n||[]).length?u.n.slice():["Do"];
     while(base.length<melCount) base.push(base[base.length-1]);
@@ -592,7 +598,7 @@ function applyTokens(w,raw){
   }
   if(addMode&&notes.length){
     var ap=selPath.split(".").map(Number),line=s.sections[ap[0]].lines[ap[1]];
-    var nu={t:"",n:notes.map(function(nt){ return fmt({l:nt.l,a:nt.a,o:nt.o===null?(parse((u.n||[])[0]).o):nt.o}); })};
+    var nu={t:"",n:notes.map(function(nt){ return fmt({l:nt.l,a:nt.a,o:nt.o===null?3:nt.o}); })};
     if(hasDur) nu.d=Math.round(dur*1000)/1000;
     if(u.r&&!selRest){ nu.r=u.r; delete u.r; } // con una nota marcada, la nueva va pegada a ella; con un silencio marcado, va detrás del silencio
     line.units.splice(ap[2]+1,0,nu);
@@ -605,15 +611,13 @@ function applyTokens(w,raw){
   if(melis&&selNote>=(u.n||[]).length) selNote=0;
   if(notes.length===1&&!keep&&melis){
     var pvm=parse(u.n[selNote]),ntm=notes[0],om=ntm.o;
-    if(om===null){ var refm=midiOf(pvm),bm=null; for(var oc2=1;oc2<=7;oc2++){ var dm=Math.abs(midiOf({l:ntm.l,a:ntm.a,o:oc2})-refm); if(bm===null||dm<bm){ bm=dm; om=oc2; } } }
+    if(om===null) om=3; // como en su hoja: sin número, octava 3; la de arriba se dice «cuatro» u «octava arriba»
     u.n[selNote]=fmt({l:ntm.l,a:ntm.a,o:om}); beep(u.n[selNote]); changedSome=true; did.push("nota "+(selNote+1)+": "+u.n[selNote]);
     notes=[]; melisDone=true;
   }
   if(notes.length&&!keep){
     var prev=(u.n||[]).map(parse);
-    u.n=notes.map(function(nt,ix){ var o=nt.o; if(o===null){ var pv=prev[ix]||prev[0]; o=3;
-        if(pv){ var ref=midiOf(pv),best=null; for(var oc=1;oc<=7;oc++){ var dd=Math.abs(midiOf({l:nt.l,a:nt.a,o:oc})-ref); if(best===null||dd<best){ best=dd; o=oc; } } } }
-      return fmt({l:nt.l,a:nt.a,o:o}); });
+    u.n=notes.map(function(nt){ return fmt({l:nt.l,a:nt.a,o:nt.o===null?3:nt.o}); });
     beep(u.n[0]); changedSome=true; did.push(u.n.join("-"));
   }
   if(hasDur){
@@ -631,10 +635,10 @@ function applyTokens(w,raw){
   }
   if(beat){ u.b=beat; changedSome=true; did.push("tiempo "+beat); }
   if(changedSome){ dict.undo.push(snapshot); if(dict.undo.length>50) dict.undo.shift(); dirty=true; dict.last="«"+(u.t||"")+"»: "+did.join(", "); }
-  if(changedSome&&(notes.length||hasDur)) lastApplied=selPath;
+  if(changedSome&&hasDur) lastApplied=selPath;
   if(nav>0&&!changedSome&&(u.n||[]).length>1&&selNote<u.n.length-1){ selNote++; dict.last="«"+(u.t||"")+"» nota "+selNote+" bien → nota "+(selNote+1); return; }
   if(nav) { if(nav>0) lastApplied=selPath; var ix2=paths.indexOf(selPath)+nav; if(ix2>=0&&ix2<paths.length){ selPath=paths[ix2]; selNote=0; } if(!changedSome) dict.last="«"+(unitAt(paths[Math.max(0,ix2-nav)]).t||"")+"» bien → siguiente"; }
-  else if(changedSome&&(notes.length||hasDur||melisDone)){
+  else if(changedSome&&(hasDur||(melisDone&&hasDur))){
     if(melis&&selNote<u.n.length-1&&(hasDur||melisDone)){ selNote++; }
     else { var ix3=paths.indexOf(selPath)+1; if(ix3<paths.length){ selPath=paths[ix3]; selNote=0; } } }
   selPaths=[selPath];
