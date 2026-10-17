@@ -112,7 +112,7 @@ function show(){
   side.appendChild(bar);
   if(dict.err){ var er=document.createElement("p"); er.className="hint"; er.textContent=dict.err; side.appendChild(er); dict.err=""; }
   if(dict.on) panel.appendChild(dictPanel());
-  if(st.edit&&!st.k) panel.appendChild(textDict());
+  if(st.edit&&!st.k&&(!SR||dict.needText)) panel.appendChild(textDict()); // solo de recambio, si el dictado no funciona
   else if(st.edit&&!selPath){ var h=document.createElement("p"); h.className="hint"; h.textContent="Toca la nota que quieras cambiar."+(st.k?" (Para cambiar notas, pon el tono a 0.)":""); side.appendChild(h); }
   var pg=document.createElement("div"); pg.className="page"+(st.edit?" editing":""); main.appendChild(pg);
   if(st.score&&window.SCORE){ pg.classList.add("plain"); SCORE.render(s,pg,{transpose:st.k}); }
@@ -310,7 +310,7 @@ function listen(){
     dict.active=false;
     if(!dict.on) return;
     setStatus("🔄 Reconectando…");
-    if((dict.fails||0)>6){ dict.err="El reconocimiento de voz del navegador se ha cortado varias veces. Puedes usar el cuadro «Dictar con el teclado» de abajo."; stopDict(); show(); return; }
+    if((dict.fails||0)>6){ dict.err="El reconocimiento de voz del navegador se ha cortado varias veces. Puedes usar el cuadro «Dictar con el teclado» de abajo."; dict.needText=true; stopDict(); show(); return; }
     setTimeout(listen,250);
   };
   try{ r.start(); }catch(e){ dict.active=false; }
