@@ -40,13 +40,14 @@ function build(song,k){
     e.e=end;
   }
   // línea de tiempo plana de piezas (nota o silencio) con su sílaba
-  var pieces=[],cur=0;
+  var pieces=[],cur=0,lastPath=null;
   ev.forEach(function(e){
     if(!e.notes.length){ // sílaba sin nota: se pega a la nota anterior como texto extra
       if(pieces.length){ var last=pieces[pieces.length-1]; last.extraLyric=(last.extraLyric?last.extraLyric+" ":"")+(e.u.t||""); }
       return;
     }
-    if(e.s>cur) pieces.push({rest:true,s:cur,d:e.s-cur});
+    if(e.s>cur) pieces.push({rest:true,s:cur,d:e.s-cur,owner:lastPath});
+    lastPath=e.path;
     var n=e.notes.length,len=e.e-e.s,each=Math.max(1,Math.floor(len/n)),t=e.s;
     e.notes.forEach(function(nt,ix){
       var d=ix===n-1?e.e-t:each;
@@ -56,7 +57,7 @@ function build(song,k){
     cur=e.e;
   });
   var total=Math.max(cur,B),nb=Math.ceil(total/B);
-  if(cur<nb*B) pieces.push({rest:true,s:cur,d:nb*B-cur});
+  if(cur<nb*B) pieces.push({rest:true,s:cur,d:nb*B-cur,owner:lastPath,fill:true});
   // trocear por compases y duraciones escribibles
   var bars=[];for(var b=0;b<nb;b++) bars.push([]);
   pieces.forEach(function(p){
@@ -65,7 +66,7 @@ function build(song,k){
       var bi=Math.floor(t/B),room=(bi+1)*B-t,take=Math.min(room,left);
       var parts=split(take);
       parts.forEach(function(d,pi){
-        var seg={rest:p.rest,d:d,note:p.note,path:p.path,mark:p.mark};
+        var seg={rest:p.rest,d:d,note:p.note,path:p.path,mark:p.mark,owner:p.owner,fill:p.fill};
         if(firstSeg){ seg.lyric=p.lyric; seg.extraLyric=p.extraLyric; seg.cues=p.cues; seg.mel=p.mel; }
         else if(!p.rest) seg.cont=true;
         firstSeg=false;
@@ -76,7 +77,7 @@ function build(song,k){
     }
   });
   // un compás entero en silencio = silencio de redonda
-  bars=bars.map(function(bar){ return bar.every(function(x){return x.rest;})?[{rest:true,d:B,whole:true}]:bar; });
+  bars=bars.map(function(bar){ return bar.every(function(x){return x.rest;})?[{rest:true,d:B,whole:true,owner:bar[0]&&bar[0].owner,fill:bar[0]&&bar[0].fill}]:bar; });
   // quitar compases vacíos del principio
   while(bars.length>1&&bars[0].length===1&&bars[0][0].whole) bars.shift();
   // anacrusa: si el primer compás empieza con silencio, se escribe incompleto (solo las notas de antes del 1)
@@ -105,8 +106,10 @@ function clef(g,x,octUp){
   E("circle",{cx:7.5,cy:49,r:2.8,"class":"fillink"},c);
   if(octUp) T("8",{x:10,y:62,"class":"small"},c);
 }
-function rest(g,x,d,whole){
-  var r=E("g",{transform:"translate("+x+",0)"},g),base=whole?16:d,dotted=[3,6,12].indexOf(base)>=0,core=dotted?base*2/3:base;
+function rest(g,x,d,whole,owner){
+  var r=E("g",{transform:"translate("+x+",0)","class":"sr"},g);
+  if(owner){ r.setAttribute("data-rp",owner); E("rect",{x:-11,y:4,width:22,height:34,rx:4,"class":"hit rhit"},r); }
+  var base=whole?16:d,dotted=[3,6,12].indexOf(base)>=0,core=dotted?base*2/3:base;
   if(core>=16){ E("rect",{x:-6,y:10,width:12,height:5,"class":"fillink"},r); }
   else if(core===8){ E("rect",{x:-6,y:15,width:12,height:5,"class":"fillink"},r); }
   else if(core===4){ E("path",{d:"M-2,7 L4,14 L0,20 L5,27 C0,25 -2,29 2,33 C-5,30 -4,23 2,24 L-3,18 L1,13 Z","class":"fillink"},r); }
@@ -213,7 +216,7 @@ function render(song,root,o){
       groups.forEach(function(g,gi){ g.forEach(function(ix){ inBeam[ix]=gi; }); });
       barItems.forEach(function(it,ix){
         var w=itemWidth(it)*stretch,cx=x+Math.min(w/2,(it.showAcc?18:12)+4*Math.sqrt(it.d));
-        if(it.rest) rest(svg,cx,it.d,it.whole);
+        if(it.rest) rest(svg,cx,it.d,it.whole,it.fill?null:it.owner);
         else{
           var r=drawNote(svg,cx,it,m.octUp,inBeam[ix]!==undefined); r.it=it; heads.push(r); drawn[ix]=r;
           var txt=it.lyric||"";
