@@ -35,7 +35,7 @@ function build(song,k){
   // fin de cada evento = inicio del siguiente; notas de una sílaba se reparten
   for(var i=0;i<ev.length;i++){
     var e=ev[i],nx=ev[i+1];
-    var end=nx?nx.s:Math.max(e.s+1,Math.round((e.endBeat-tl.origin)*U));
+    var end=Math.round((e.endBeat-tl.origin)*U); if(nx) end=Math.min(end,nx.s); end=Math.max(end,e.s+1);
     if(e.notes.length>1&&end-e.s<e.notes.length){ var need=e.s+e.notes.length; for(var j=i+1;j<ev.length&&ev[j].s<need+(j-i-1);j++) ev[j].s=need+(j-i-1); end=nx?nx.s:need; }
     e.e=end;
   }
