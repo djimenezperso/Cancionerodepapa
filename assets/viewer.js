@@ -117,18 +117,29 @@ function editor(s){
   var bsel=document.createElement("select"); bsel.setAttribute("aria-label","Tiempo"); bsel.append(new Option("Tiempo: —",""));
   for(var i=1;i<=M;i++) bsel.append(new Option("Tiempo: "+i,String(i))); bsel.value=u.b?String(u.b):"";
   bsel.onchange=function(){ if(bsel.value) u.b=+bsel.value; else delete u.b; delete u.pos; changed(); };
-  var dsel=document.createElement("select"); dsel.setAttribute("aria-label","Duración"); dsel.append(new Option("Duración: —",""));
-  DURS.forEach(function(d){ dsel.append(new Option(d[0],String(d[1]))); }); dsel.value=u.d?String(u.d):"";
-  dsel.onchange=function(){ if(dsel.value) u.d=+dsel.value; else delete u.d; changed(); };
   var txt=document.createElement("input"); txt.value=u.t||""; txt.setAttribute("aria-label","Sílaba");
   txt.onchange=function(){ u.t=txt.value; changed(); };
-  r4.append(bsel,dsel,sp("Sílaba","lbl"),txt);
+  r4.append(bsel,sp("Sílaba","lbl"),txt);
   ed.append(r4);
+  // duración: se tocan figuras y se suman (ligaduras)
+  var r6=document.createElement("div"); r6.className="r";
+  r6.append(sp("Duración: "+(u.d?durText(u.d):"sin poner"),"t"));
+  ed.append(r6);
+  var r7=document.createElement("div"); r7.className="r";
+  r7.append(sp(u.d?"Sumar (ligar):":"Elige:","lbl"));
+  DURS.forEach(function(d){ r7.append(b(d[0],function(){ u.d=Math.round(((u.d||0)+d[1])*100)/100; changed(); })); });
+  if(u.d) r7.append(b("Borrar duración",function(){ delete u.d; changed(); }));
+  ed.append(r7);
   var r5=document.createElement("div"); r5.className="r";
   r5.append(b("◀ Anterior",function(){ move(-1); }),b("Siguiente ▶",function(){ move(1); }),b("Cerrar",function(){ selPath=null; show(); }));
   if(dirty) r5.append(b("💾 Guardar cambios",save,"pri"));
   ed.append(r5);
   return ed;
+}
+function durText(v){
+  // descompone en figuras para mostrarlo: 5.5 → "redonda + negra con puntillo"
+  var out=[],left=v; DURS.forEach(function(d){ while(left>=d[1]-1e-6){ out.push(d[0]); left=Math.round((left-d[1])*1000)/1000; } });
+  return (out.length?out.join(" + "):"")+" ("+(Math.round(v*100)/100)+" pulsos)";
 }
 function move(dir){
   var all=[],s=S[st.i]; s.sections.forEach(function(sec,si){ sec.lines.forEach(function(l,li){ l.units.forEach(function(u,ui){ all.push(si+"."+li+"."+ui); }); }); });
