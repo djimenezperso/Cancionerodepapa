@@ -178,8 +178,8 @@ function editor(s){
   top.append(b("🗑",function(){ delSelected(); show(); },"","Eliminar esta nota"));
   top.append(b("✂ Separar",function(){ if(splitUnit(selPath)){ selPaths=[selPath]; changed(); } },"","Separar la palabra en sílabas, una nota en cada una"),
     b("Unir ▶",function(){ if(joinUnit(selPath)) changed(); },"","Unir con la sílaba siguiente"));
-  top.append(b("+",function(){ u.n.push(u.n.length?u.n[u.n.length-1]:"Do"); selNote=u.n.length-1; changed(); },"","Añadir nota a esta sílaba"));
-  if(u.n.length>1) top.append(b("−",function(){ u.n.splice(selNote,1); selNote=0; changed(); },"","Quitar esta nota"));
+  top.append(b("+",function(){ u.n.push(u.n.length?u.n[u.n.length-1]:"Do"); delete u.nd; selNote=u.n.length-1; changed(); },"","Añadir nota a esta sílaba"));
+  if(u.n.length>1) top.append(b("−",function(){ u.n.splice(selNote,1); delete u.nd; selNote=0; changed(); },"","Quitar esta nota"));
   var bsel=document.createElement("select"); bsel.setAttribute("aria-label","Tiempo"); bsel.append(new Option("T: —",""));
   for(var i=1;i<=M;i++) bsel.append(new Option("T: "+i,String(i))); bsel.value=u.b?String(u.b):"";
   bsel.onchange=function(){ if(bsel.value) u.b=+bsel.value; else delete u.b; delete u.pos; changed(); };
@@ -199,7 +199,10 @@ function editor(s){
       b("🔊",function(){ beep(u.n[selNote]); },"","Oír la nota"));
     ed.append(r2);
   }
-  ed.append(durRow(function(v,add){ if(v===null){ delete u.d; return; } u.d=add&&u.d?Math.round((u.d+v)*100)/100:v; },u.d||0));
+  if(u.n.length>1){
+    var cd=u.nd&&u.nd.length===u.n.length?u.nd[selNote]:0;
+    ed.append(durRow(function(v,add){ if(v===null){ delete u.nd; delete u.d; return; } setNoteDur(u,selNote,add&&cd?cd+v:v); },cd));
+  } else ed.append(durRow(function(v,add){ if(v===null){ delete u.d; return; } u.d=add&&u.d?Math.round((u.d+v)*100)/100:v; },u.d||0));
   ed.append(navRow());
   return ed;
 }
@@ -300,6 +303,7 @@ function splitUnit(path){
   news[0].b=u.b; if(!news[0].b) delete news[0].b;
   if(u.d){ var each=Math.round(u.d/news.length*4)/4||0.5; news.forEach(function(x){ x.d=each; }); }
   if(u.mark) news.forEach(function(x){ x.mark=true; });
+  if(u.nd&&u.nd.length===news.length) news.forEach(function(x,i){ x.d=u.nd[i]; });
   if(u.r) news[news.length-1].r=u.r; if(u.pause) news[news.length-1].pause=true;
   line.units.splice.apply(line.units,[a[2],1].concat(news));
   return news.length;
@@ -307,7 +311,7 @@ function splitUnit(path){
 function joinUnit(path){
   var a=path.split(".").map(Number),line=S[st.i].sections[a[0]].lines[a[1]],u=line.units[a[2]],nx=line.units[a[2]+1];
   if(!nx) return false;
-  u.t=(u.t||"").replace(/-$/,"")+(nx.t||""); u.n=(u.n||[]).concat(nx.n||[]);
+  u.t=(u.t||"").replace(/-$/,"")+(nx.t||""); u.n=(u.n||[]).concat(nx.n||[]); delete u.nd;
   if(u.d||nx.d) u.d=(u.d||0)+(nx.d||0); if(nx.r) u.r=nx.r; if(nx.pause) u.pause=true;
   line.units.splice(a[2]+1,1); return true;
 }
@@ -381,17 +385,24 @@ function dictPanel(){
   live.textContent=dict.interim?"… "+dict.interim:(dict.last?"✔ "+dict.last:"Habla: «Fa negra», «bien», «silencio de negra», «guardar»…");
   d.append(live);
   if(showHelp){ var h=document.createElement("p"); h.className="help";
-    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra». «Bien» deja la nota igual. «Cuatro corcheas» pone corchea a las 4 siguientes. «Añadir silencio de negra», «añadir Fa negra». «Octava arriba» / «octava abajo» sube o baja la nota marcada una octava («medio tono arriba/abajo» también). «Eliminar» borra lo marcado (un silencio, una nota o la sílaba entera). «Separar», «unir», «una sola nota». «Silencio de negra», «quitar silencio», «anterior», «ir a love», «deshacer», «guardar».";
+    h.textContent="Nota y figura, y pasa sola a la siguiente: «Fa negra», «Si bemol blanca», «Do cuatro corchea», «redonda ligada a negra con puntillo», «igual corchea». Varias seguidas: «Sol corchea, La negra». «Bien» deja la nota igual. «Cuatro corcheas» pone corchea a las 4 siguientes. «Añadir silencio de negra», «añadir Fa negra». «Cinco notas» pone 5 notas en la sílaba marcada y luego las dices una a una. «Octava arriba» / «octava abajo» sube o baja la nota marcada una octava («medio tono arriba/abajo» también). «Eliminar» borra lo marcado (un silencio, una nota o la sílaba entera). «Separar», «unir», «una sola nota». «Silencio de negra», «quitar silencio», «anterior», «ir a love», «deshacer», «guardar».";
     d.append(h); }
   return d;
 }
 var DELW={eliminar:1,elimina:1,eliminalo:1,eliminala:1,borrar:1,borra:1,borralo:1,borrala:1,quitar:1,quita:1,quitalo:1,quitala:1,suprimir:1,suprime:1,fuera:1,sobra:1};
 /* «eliminar»: borra lo que está marcado (un silencio, una de las notas de la sílaba o la sílaba entera) */
+/* duración de cada nota dentro de una sílaba con varias notas (nd) y total (d) */
+function setNoteDur(u,ix,v){
+  var n=(u.n||[]).length; if(n<2){ u.d=v; return; }
+  if(!u.nd||u.nd.length!==n){ var each=(u.d||n*0.5)/n; u.nd=u.n.map(function(){ return each; }); if(ix===0) u.nd=u.n.map(function(){ return v; }); }
+  u.nd[ix]=v; u.nd=u.nd.map(function(x){ return Math.round(x*1000)/1000; });
+  u.d=Math.round(u.nd.reduce(function(a,x){return a+x;},0)*1000)/1000;
+}
 function delSelected(snapshot){
   var s=S[st.i],u=unitAt(selPath),a=selPath.split(".").map(Number);
   dict.undo.push(snapshot||{song:JSON.parse(JSON.stringify(s)),sel:selPath}); dirty=true;
   if(selRest){ delete u.r; delete u.e; delete u.pos; selRest=false; dict.last="Silencio eliminado detrás de «"+(u.t||"")+"»"; return false; }
-  if((u.n||[]).length>1){ var gone=u.n.splice(Math.min(selNote,u.n.length-1),1); selNote=0; dict.last="Nota "+gone[0]+" eliminada de «"+(u.t||"")+"»"; return false; }
+  if((u.n||[]).length>1){ var gone=u.n.splice(Math.min(selNote,u.n.length-1),1); delete u.nd; selNote=0; dict.last="Nota "+gone[0]+" eliminada de «"+(u.t||"")+"»"; return false; }
   var sec=s.sections[a[0]],line=sec.lines[a[1]],name=u.t||((u.n||[]).join("-"));
   line.units.splice(a[2],1);
   if(!line.units.length){ sec.lines.splice(a[1],1); if(!sec.lines.length) s.sections.splice(a[0],1); }
@@ -467,12 +478,14 @@ function applyTokens(w,raw){
   }
   var s=S[st.i],paths=allPaths(); if(!selPath) selPath=paths[0];
   var snapshot={song:JSON.parse(JSON.stringify(s)),sel:selPath};
-  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false,single=0,addMode=false;
+  var notes=[],dur=0,hasDur=false,rest=null,beat=null,nav=0,go=null,keep=false,clear=false,did=[],melisDone=false,single=0,addMode=false,melCount=0;
   for(var i=0;i<w.length;i++){
     var x=w[i];
     if(x==="deshacer"||x==="deshaz"){ undoCmd(); return false; }
     if(x==="separar"||x==="separa"||x==="dividir"||x==="divide"||x==="partir"||x==="parte"){ var pre=JSON.parse(JSON.stringify(s)),ns=splitUnit(selPath); if(ns){ dict.undo.push({song:pre,sel:selPath}); dirty=true; dict.last="Separada en "+ns+" sílabas"; } else dict.last="No sé separar «"+(unitAt(selPath).t||"")+"»"; return; }
     if(x==="unir"||x==="une"||x==="junta"||x==="juntar"){ var pre2=JSON.parse(JSON.stringify(s)); if(joinUnit(selPath)){ dict.undo.push({song:pre2,sel:selPath}); dirty=true; dict.last="Unida con la siguiente"; } return; }
+    var cntN=NUMW[x]||(/^\d{1,2}$/.test(x)?parseInt(x,10):0);
+    if(cntN>1&&cntN<=16&&(w[i+1]==="notas"||w[i+1]==="nota")){ melCount=cntN; i++; continue; }
     if((x==="una"&&(w[i+1]==="nota"||w[i+1]==="sola"))||(x==="solo"&&w[i+1]==="una")){ single=1; i++; while(w[i+1]==="nota"||w[i+1]==="sola"||w[i+1]==="una") i++; continue; }
     if((x==="quitar"||x==="borrar"||x==="quita"||x==="borra")&&w[i+1]==="nota"){ single=2; i++; continue; }
     if(OKW[x]||x==="adelante"){ nav=1; continue; }
@@ -495,6 +508,7 @@ function applyTokens(w,raw){
       var nt={l:NOTEW[x],a:"",o:null};
       if(w[i+1]==="sostenido"||w[i+1]==="#"){ nt.a="#"; i++; } else if(w[i+1]==="bemol"){ nt.a="b"; i++; }
       if(w[i+1]&&/^[1-7]$/.test(w[i+1])){ nt.o=+w[i+1]; i++; }
+      else if(NUMW[w[i+1]]&&NUMW[w[i+1]]<=7&&!(DURW[w[i+2]]&&/s$/.test(w[i+2]))){ nt.o=NUMW[w[i+1]]; i++; }
       else if(w[i+1]==="octava"&&w[i+2]&&(NUMW[w[i+2]]||/^[1-7]$/.test(w[i+2]))){ nt.o=NUMW[w[i+2]]||+w[i+2]; i+=2; }
       notes.push(nt); continue;
     }
@@ -506,9 +520,16 @@ function applyTokens(w,raw){
     return; }
   var u=unitAt(selPath),changedSome=false;
   if(clear){ delete u.d; delete u.r; changedSome=true; did.push("sin duración"); }
+  if(melCount){
+    var base=(u.n||[]).length?u.n.slice():["Do"];
+    while(base.length<melCount) base.push(base[base.length-1]);
+    u.n=base.slice(0,melCount); delete u.nd; selNote=0; changedSome=true; did.push(melCount+" notas en esta sílaba: dícelas una a una");
+    dict.undo.push(snapshot); dirty=true; dict.last="«"+(u.t||"")+"»: "+melCount+" notas. Dime la 1ª (por ejemplo «Fa corchea»)."; return;
+  }
   if(single&&(u.n||[]).length>1){
     var keepN=single===1?u.n[0]:null;
     if(single===1) u.n=[keepN]; else u.n.splice(Math.min(selNote,u.n.length-1),1);
+    delete u.nd;
     selNote=0; changedSome=true; did.push("una sola nota: "+u.n.join("-"));
   }
   if(addMode&&notes.length){
@@ -538,7 +559,7 @@ function applyTokens(w,raw){
     beep(u.n[0]); changedSome=true; did.push(u.n.join("-"));
   }
   if(hasDur){
-    if(melis){ u.d=Math.round(((selNote>0?(u.d||0):0)+dur)*1000)/1000; did.push("nota "+(selNote+1)+" de "+u.n.length+": "+durText(dur).replace(/ \(.*$/,"")); }
+    if(melis){ setNoteDur(u,selNote,dur); did.push("nota "+(selNote+1)+" de "+u.n.length+": "+durText(dur).replace(/ \(.*$/,"")); }
     else { u.d=Math.round(dur*1000)/1000; did.push(durText(u.d)); }
     delete u.pos; delete u.e; changedSome=true; }
   if(rest!==null){
