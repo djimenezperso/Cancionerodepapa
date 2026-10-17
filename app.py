@@ -52,7 +52,7 @@ def sync_store(force=False):
     tok, repo = secret("GITHUB_TOKEN"), secret("GITHUB_REPO")
     if not tok or not repo:
         return ""
-    lib.GH.update(token=tok.strip(), repo=repo.strip().strip("/"))
+    lib.GH.update(token=tok.strip(), repo=lib.clean_repo(repo))
     if force or not st.session_state.get("synced") or time.time() - lib.GH.get("last", 0) > 60:
         err = lib.gh_sync(tok, repo)
         if err:
