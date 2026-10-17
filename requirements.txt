@@ -3,3 +3,4 @@ openai>=1.50
 anthropic>=0.40
 pillow>=10.0
 pandas>=2.0
+requests>=2.28
