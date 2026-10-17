@@ -136,7 +136,9 @@ window.CORE=(function(){
       self.stop(); var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return false;
       ctx=new AC(); self.playing=true; self.onEnd=o.onEnd;
       var tl=timeline(song),M=tl.M,spb=60/Math.max(30,Math.min(240,o.tempo||80)),t0=ctx.currentTime+0.15,k=o.transpose||0;
-      function T(abs){ return t0+(abs-tl.origin+M)*spb; }
+      var minStart=tl.items.length?Math.min.apply(null,tl.items.map(function(i){return i.start;})):0;
+      var ref=o.click===false?minStart:tl.origin-M; // sin metrónomo no hay compás de cuenta: empieza en la primera nota
+      function T(abs){ return t0+(abs-ref)*spb; }
       var lastEnd=tl.items.length?Math.max.apply(null,tl.items.map(function(i){return i.end;})):M;
       var master=ctx.createGain(); master.gain.value=0.9; master.connect(ctx.destination);
       if(o.click!==false){
