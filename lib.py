@@ -97,6 +97,118 @@ def slug(text: str) -> str:
     return t or "cancion"
 
 
+# --------------------------------------------------------------------------- copia permanente en GitHub
+#
+# Streamlit Cloud borra los archivos nuevos al reiniciar. Si hay GITHUB_TOKEN y GITHUB_REPO,
+# cada canción y cada foto se guardan también en la rama «datos» del repositorio, y al
+# arrancar la app se descargan de ahí. La rama es distinta de «main» para que guardar una
+# canción no reinicie la app.
+
+GH = {"token": "", "repo": "", "branch": "datos", "shas": {}, "error": ""}
+
+
+def gh_enabled() -> bool:
+    return bool(GH["token"] and GH["repo"])
+
+
+def _gh(method: str, path: str, **kw):
+    import requests
+
+    r = requests.request(
+        method,
+        f"https://api.github.com/repos/{GH['repo']}{path}",
+        headers={"Authorization": f"Bearer {GH['token']}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
+        timeout=30,
+        **kw,
+    )
+    return r
+
+
+def _gh_fail(r, what: str) -> str:
+    if r.status_code in (401, 403):
+        return f"GitHub no deja {what}: revisa que el token tenga permiso de «Contents: Read and write» en este repositorio."
+    if r.status_code == 404:
+        return f"GitHub no encuentra el repositorio «{GH['repo']}». Revisa GITHUB_REPO (usuario/nombre) y que el token tenga acceso a él."
+    return f"GitHub ha fallado al {what} ({r.status_code})."
+
+
+def _blob_sha(data: bytes) -> str:
+    import hashlib
+
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def gh_sync(token: str, repo: str) -> str:
+    """Prepara GitHub y trae a la carpeta local las canciones guardadas. Devuelve '' o un aviso."""
+    GH.update(token=token.strip(), repo=repo.strip().strip("/"), shas={}, error="")
+    if not gh_enabled():
+        return ""
+    try:
+        r = _gh("GET", f"/git/trees/{GH['branch']}?recursive=1")
+        if r.status_code == 404:  # la rama «datos» aún no existe: se crea a partir de main con las canciones actuales
+            info = _gh("GET", "")
+            if info.status_code != 200:
+                raise RuntimeError(_gh_fail(info, "leer el repositorio"))
+            base = info.json().get("default_branch", "main")
+            ref = _gh("GET", f"/git/ref/heads/{base}")
+            if ref.status_code != 200:
+                raise RuntimeError(_gh_fail(ref, "leer la rama principal"))
+            mk = _gh("POST", "/git/refs", json={"ref": f"refs/heads/{GH['branch']}", "sha": ref.json()["object"]["sha"]})
+            if mk.status_code not in (200, 201):
+                raise RuntimeError(_gh_fail(mk, "crear la rama de datos"))
+            r = _gh("GET", f"/git/trees/{GH['branch']}?recursive=1")
+        if r.status_code != 200:
+            raise RuntimeError(_gh_fail(r, "leer las canciones"))
+        remote = {t["path"]: t["sha"] for t in r.json().get("tree", []) if t.get("type") == "blob" and t["path"].startswith("songs/")}
+        GH["shas"] = dict(remote)
+        for path, sha in remote.items():
+            f = ROOT / path
+            if f.exists() and _blob_sha(f.read_bytes()) == sha:
+                continue
+            b = _gh("GET", f"/git/blobs/{sha}")
+            if b.status_code != 200:
+                continue
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(base64.b64decode(b.json()["content"]))
+        # lo que se borró en GitHub se borra también aquí
+        for f in list(SONGS.glob("*.json")) + list(PHOTOS.glob("*")):
+            rel = f.relative_to(ROOT).as_posix()
+            if rel not in remote:
+                f.unlink()
+        return ""
+    except Exception as e:
+        GH["error"] = str(e)
+        return str(e)
+
+
+def _gh_put(rel: str, data: bytes, msg: str) -> None:
+    if not gh_enabled():
+        return
+    body = {"message": msg, "content": base64.b64encode(data).decode(), "branch": GH["branch"]}
+    if rel in GH["shas"]:
+        body["sha"] = GH["shas"][rel]
+    r = _gh("PUT", f"/contents/{rel}", json=body)
+    if r.status_code in (409, 422):  # sha desactualizado: se pide el actual y se reintenta una vez
+        cur = _gh("GET", f"/contents/{rel}?ref={GH['branch']}")
+        if cur.status_code == 200:
+            body["sha"] = cur.json()["sha"]
+        else:
+            body.pop("sha", None)
+        r = _gh("PUT", f"/contents/{rel}", json=body)
+    if r.status_code not in (200, 201):
+        raise RuntimeError(_gh_fail(r, "guardar"))
+    GH["shas"][rel] = r.json()["content"]["sha"]
+
+
+def _gh_delete(rel: str) -> None:
+    if not gh_enabled() or rel not in GH["shas"]:
+        return
+    r = _gh("DELETE", f"/contents/{rel}", json={"message": f"Borrar {rel}", "sha": GH["shas"][rel], "branch": GH["branch"]})
+    if r.status_code not in (200, 404):
+        raise RuntimeError(_gh_fail(r, "borrar"))
+    GH["shas"].pop(rel, None)
+
+
 # --------------------------------------------------------------------------- almacenamiento
 
 
@@ -127,7 +239,13 @@ def save_song(row: dict, song_id: str | None = None) -> str:
         song_id = f"{slug(row.get('title', ''))}-{uuid.uuid4().hex[:5]}"
     data = {k: v for k, v in row.items() if k != "id"}
     data["updatedAt"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-    (SONGS / f"{song_id}.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), "utf-8")
+    raw = json.dumps(data, ensure_ascii=False, indent=1).encode("utf-8")
+    (SONGS / f"{song_id}.json").write_bytes(raw)
+    # fotos que aún no estén en GitHub (por ejemplo, guardadas antes de configurar el token)
+    for ph in data.get("photos") or []:
+        if gh_enabled() and ph not in GH["shas"] and (ROOT / ph).exists():
+            _gh_put(ph, (ROOT / ph).read_bytes(), f"Foto de {data.get('title', '')}")
+    _gh_put(f"songs/{song_id}.json", raw, f"Guardar «{data.get('title', '')}»")
     return song_id
 
 
@@ -136,9 +254,11 @@ def delete_song(song_id: str) -> None:
     if row:
         for ph in row.get("photos") or []:
             f = ROOT / ph
-            if f.exists() and f.parent == PHOTOS:
-                f.unlink()
+            if f.parent == PHOTOS:
+                f.unlink(missing_ok=True)
+                _gh_delete(ph)
     (SONGS / f"{song_id}.json").unlink(missing_ok=True)
+    _gh_delete(f"songs/{song_id}.json")
 
 
 def store_photos(images: list[bytes], base: str) -> list[str]:
@@ -148,7 +268,9 @@ def store_photos(images: list[bytes], base: str) -> list[str]:
         im.thumbnail((1800, 1800))
         name = f"{slug(base)}-{uuid.uuid4().hex[:5]}_{i}.jpg"
         im.save(PHOTOS / name, quality=85)
-        paths.append(f"songs/photos/{name}")
+        rel = f"songs/photos/{name}"
+        paths.append(rel)
+        _gh_put(rel, (PHOTOS / name).read_bytes(), f"Foto {name}")
     return paths
 
 
