@@ -1,0 +1,227 @@
+{
+ "title": "Cumpleaños feliz",
+ "page": "",
+ "photos": [],
+ "song": {
+  "title": "Cumpleaños feliz",
+  "ts": "3/4",
+  "tempo": 96,
+  "page": "",
+  "general": [
+   "Soltar mandíbula",
+   "Sonreír al final"
+  ],
+  "sections": [
+   {
+    "label": "",
+    "lines": [
+     {
+      "cues": [
+       "Sonreír"
+      ],
+      "units": [
+       {
+        "t": "Cum-",
+        "n": [
+         "Sol"
+        ],
+        "b": 3,
+        "mark": true
+       },
+       {
+        "t": "ple-",
+        "n": [
+         "Sol"
+        ],
+        "mark": true
+       },
+       {
+        "t": "a-",
+        "n": [
+         "La"
+        ],
+        "b": 1
+       },
+       {
+        "t": "ños",
+        "n": [
+         "Sol"
+        ],
+        "b": 2
+       },
+       {
+        "t": "fe-",
+        "n": [
+         "Do4"
+        ],
+        "b": 3
+       },
+       {
+        "t": "liz,",
+        "n": [
+         "Si"
+        ],
+        "b": 1,
+        "u": 2,
+        "pause": true
+       }
+      ]
+     },
+     {
+      "cues": [],
+      "units": [
+       {
+        "t": "te",
+        "n": [
+         "Sol"
+        ],
+        "b": 3,
+        "mark": true
+       },
+       {
+        "t": "de-",
+        "n": [
+         "Sol"
+        ],
+        "mark": true
+       },
+       {
+        "t": "sea-",
+        "n": [
+         "La"
+        ],
+        "b": 1
+       },
+       {
+        "t": "mos",
+        "n": [
+         "Sol"
+        ],
+        "b": 2
+       },
+       {
+        "t": "a",
+        "n": [
+         "Re4"
+        ],
+        "b": 3
+       },
+       {
+        "t": "ti,",
+        "n": [
+         "Do4"
+        ],
+        "b": 1,
+        "u": 2,
+        "pause": true
+       }
+      ]
+     },
+     {
+      "cues": [
+       "No perder metal"
+      ],
+      "units": [
+       {
+        "t": "cum-",
+        "n": [
+         "Sol"
+        ],
+        "b": 3
+       },
+       {
+        "t": "plea-",
+        "n": [
+         "Sol"
+        ]
+       },
+       {
+        "t": "ños,",
+        "n": [
+         "Sol4"
+        ],
+        "b": 1,
+        "acc": true
+       },
+       {
+        "t": "a-",
+        "n": [
+         "Mi4"
+        ],
+        "b": 2
+       },
+       {
+        "t": "bue-",
+        "n": [
+         "Do4"
+        ],
+        "b": 3
+       },
+       {
+        "t": "lo,",
+        "n": [
+         "Si",
+         "La"
+        ],
+        "b": 1,
+        "u": 2,
+        "pause": true
+       }
+      ]
+     },
+     {
+      "cues": [],
+      "units": [
+       {
+        "t": "cum-",
+        "n": [
+         "Fa4"
+        ],
+        "b": 3,
+        "mark": true
+       },
+       {
+        "t": "ple-",
+        "n": [
+         "Fa4"
+        ],
+        "mark": true
+       },
+       {
+        "t": "a-",
+        "n": [
+         "Mi4"
+        ],
+        "b": 1
+       },
+       {
+        "t": "ños",
+        "n": [
+         "Do4"
+        ],
+        "b": 2
+       },
+       {
+        "t": "fe-",
+        "n": [
+         "Re4"
+        ],
+        "b": 3
+       },
+       {
+        "t": "liz.",
+        "n": [
+         "Do4"
+        ],
+        "b": 1,
+        "u": 3
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "example": true,
+ "updatedAt": "2026-10-17T12:05:07"
+}
