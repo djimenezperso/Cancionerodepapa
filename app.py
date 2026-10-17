@@ -233,6 +233,42 @@ with tab_saved:
                         except lib.ReadError as e:
                             st.error(str(e))
 
+            with st.expander("🎤 Corregir hablando"):
+                st.write("Graba lo que quieres cambiar, por ejemplo: *«en "
+                         "“so”, redonda ligada a negra con puntillo; “love” es una negra; la primera nota es Fa, no La»*.")
+                if PROVIDER != "openai":
+                    st.info("Esta función necesita la clave de OpenAI (OPENAI_API_KEY) en Secrets.")
+                else:
+                    rec = st.audio_input("Pulsa el micrófono para grabar", key=f"rec-{sel}") if hasattr(st, "audio_input") else st.file_uploader("Sube una nota de voz", type=["wav", "mp3", "m4a", "ogg", "webm"], key=f"rec-{sel}")
+                    vk = f"voice-{sel}"
+                    if rec is not None and st.button("🪄 Entender y proponer cambios", type="primary", key=f"vgo-{sel}"):
+                        with st.spinner("Escuchando…"):
+                            try:
+                                said = lib.transcribe_voice(rec.getvalue(), KEY, getattr(rec, "name", None) or "voz.wav")
+                                new_song, summary, missing = lib.voice_changes(row["song"], said, KEY, MODEL, PROVIDER)
+                                st.session_state[vk] = {"said": said, "song": new_song, "summary": summary, "missing": missing}
+                            except lib.ReadError as e:
+                                st.error(str(e))
+                    prop = st.session_state.get(vk)
+                    if prop:
+                        st.markdown(f"**He oído:** «{prop['said']}»")
+                        if prop["summary"]:
+                            st.markdown("**Cambios que voy a hacer:**\n" + "\n".join(f"- {x}" for x in prop["summary"]))
+                        else:
+                            st.warning("No he encontrado nada que cambiar.")
+                        if prop["missing"]:
+                            st.warning("No he podido aplicar: " + prop["missing"])
+                        c1, c2 = st.columns(2)
+                        if c1.button("✅ Aceptar cambios", type="primary", use_container_width=True, key=f"vok-{sel}", disabled=not prop["summary"]):
+                            row["song"] = prop["song"]
+                            _, err = safe(lib.save_song, row, sel)
+                            st.session_state.pop(vk, None)
+                            flash("warning" if err else "success", ("Guardado aquí, pero no en GitHub: " + err) if err else "Cambios guardados.")
+                            st.rerun()
+                        if c2.button("Descartar", use_container_width=True, key=f"vno-{sel}"):
+                            st.session_state.pop(vk, None)
+                            st.rerun()
+
             with st.expander("✏️ Corregir notas, tiempos y apuntes"):
                 song = row["song"]
                 if photos and st.checkbox("Mostrar la hoja original mientras corrijo", key=f"edph-{sel}"):
@@ -260,7 +296,7 @@ with tab_saved:
                         "subrayado": st.column_config.CheckboxColumn("Flecha", width="small"),
                         "pausa": st.column_config.CheckboxColumn("Punto", width="small"),
                         "círculo": st.column_config.TextColumn("Círculo", width="small"),
-                        "duración": st.column_config.SelectboxColumn("Duración", options=lib.DUR_LABELS, width="medium", help="Cuánto dura la nota, para la partitura (negra = 1 pulso)."),
+                        "duración": st.column_config.TextColumn("Duración", width="medium", help="Ejemplos: negra · corchea · redonda + negra con puntillo · 5.5 (en pulsos, negra = 1)."),
                         "silencio": st.column_config.NumberColumn("Silencio", min_value=0.0, step=0.25, width="small", help="Silencio después de la nota, en pulsos (1 = negra)."),
                     },
                 )
@@ -370,4 +406,3 @@ with tab_go:
                 st.rerun()
             except Exception as e:
                 st.error(f"Ese archivo no es una copia válida del cancionero ({e}).")
-            
