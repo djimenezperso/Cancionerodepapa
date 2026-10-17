@@ -490,4 +490,3 @@ with tab_go:
                 st.rerun()
             except Exception as e:
                 st.error(f"Ese archivo no es una copia válida del cancionero ({e}).")
-            
