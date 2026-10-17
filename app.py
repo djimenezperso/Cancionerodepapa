@@ -44,10 +44,6 @@ else:
     PROVIDER, KEY, MODEL = "", "", ""
 
 
-ritmo_component = components.declare_component("ritmo", path=str(lib.ASSETS / "ritmo"))
-AUDIO_TYPES = {"mp3": "audio/mpeg", "m4a": "audio/mp4", "aac": "audio/aac", "wav": "audio/wav", "ogg": "audio/ogg", "mp4": "video/mp4", "mov": "video/quicktime", "webm": "video/webm"}
-
-
 @st.cache_resource(show_spinner="Cargando canciones…")
 def sync_store(token, repo):
     return lib.gh_sync(token, repo)
@@ -74,13 +70,22 @@ def show_flash():
         st.session_state.flash = None
 
 
-visor_component = components.declare_component("visor", path=str(lib.ASSETS / "visor"))
+VISOR_DIR = lib.ASSETS / "visor"
+try:
+    visor_component = components.declare_component("visor", path=str(VISOR_DIR)) if (VISOR_DIR / "index.html").exists() else None
+except Exception:
+    visor_component = None
 
 
 def viewer(song, key="v", editable=False):
     """Muestra la canción. Si editable, devuelve la canción cambiada cuando se pulsa «Guardar cambios»."""
     import json as _json
 
+    if visor_component is None:  # falta assets/visor/index.html: se muestra sin poder cambiar notas
+        if editable:
+            st.caption("Para poder cambiar notas falta subir el archivo assets/visor/index.html a GitHub.")
+        components.html(lib.viewer_html([song]), height=900, scrolling=True)
+        return None
     css, js = lib.visor_assets()
     res = visor_component(song=_json.dumps(song, ensure_ascii=False), css=css, js=js, editable=editable, key=key, default=None)
     if editable and res and res.get("nonce") and st.session_state.get(f"done-{key}") != res["nonce"]:
@@ -365,3 +370,4 @@ with tab_go:
                 st.rerun()
             except Exception as e:
                 st.error(f"Ese archivo no es una copia válida del cancionero ({e}).")
+            
