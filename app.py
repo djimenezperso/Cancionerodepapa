@@ -207,8 +207,7 @@ def tools_panel(row, sel):
     """Columna lateral: preparar partitura y corregir hablando."""
     has_dur = any("d" in u for sec in row["song"].get("sections", []) for line in sec.get("lines", []) for u in line.get("units", []))
     st.markdown('<p class="lbl">Herramientas</p>', unsafe_allow_html=True)
-    if st.button("🎼 Recalcular ritmo" if has_dur else "🎼 Preparar la partitura", key=f"rhy-{sel}", use_container_width=True,
-                 help="La IA propone cuánto dura cada nota a partir de los números de tiempo y de la canción."):
+    if st.button("🎼 La IA propone el ritmo otra vez" if has_dur else "🎼 Preparar la partitura", key=f"rhy-{sel}", use_container_width=True):
         if not KEY:
             st.error("La app no tiene clave de IA configurada.")
         else:
@@ -220,6 +219,13 @@ def tools_panel(row, sel):
                     st.rerun()
                 except lib.ReadError as e:
                     st.error(str(e))
+    photos = [lib.photo_bytes(p) for p in row.get("photos") or [] if lib.photo_bytes(p)]
+    if photos and st.button("🔄 Volver a leer la hoja", key=f"reread-{sel}", use_container_width=True, help="La IA vuelve a leer la foto desde cero (se pierden los cambios hechos a mano)."):
+        res = transcribe(photos, row.get("title", ""))
+        if res:
+            st.session_state.pending = {"song": res[0], "doubts": res[1], "images": photos, "target": sel}
+            st.rerun()
+    st.caption("Calcula cuánto dura cada nota (negra, corchea…) para dibujar la partitura. Si ya lo hiciste, vuelve a calcularlo todo desde cero: solo úsalo si las duraciones salen muy mal, porque borra las que hayas puesto a mano." if has_dur else "Calcula cuánto dura cada nota (negra, corchea…) para poder dibujar la partitura.")
     st.markdown("**🎤 Corregir hablando**")
     st.caption("Frases largas, por ejemplo: «en “so”, redonda ligada a negra con puntillo; la primera nota es Fa, no La». Para ir nota a nota, usa «🎤 Dictar» en la canción.")
     if PROVIDER != "openai":
@@ -348,62 +354,6 @@ with tab_saved:
             for im in photos:
                 st.image(im, use_container_width=True)
 
-
-        if row.get("song"):
-            with st.expander("✏️ Corregir notas, tiempos y apuntes"):
-                song = row["song"]
-                if photos and st.checkbox("Mostrar la hoja original mientras corrijo", key=f"edph-{sel}"):
-                    for im in photos:
-                        st.image(im, use_container_width=True)
-                c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
-                title = c1.text_input("Título", song["title"], key=f"t-{sel}")
-                page = c2.text_input("Hoja nº", song.get("page", ""), key=f"p-{sel}")
-                ts = c3.selectbox("Compás", lib.TIME_SIGNATURES, index=lib.TIME_SIGNATURES.index(song["ts"]), key=f"ts-{sel}")
-                tempo = c4.number_input("♩ por minuto", 30, 240, int(song["tempo"]), key=f"bpm-{sel}")
-                general = st.text_area("Apuntes generales (uno por línea)", "\n".join(song.get("general", [])), key=f"g-{sel}")
-                units, lines = lib.song_to_rows(song)
-                m = lib.beats_per_bar(ts)
-                st.caption("Cada fila es una sílaba o palabra. «Tiempo» es el número de colores; «Hasta» es el tiempo donde termina si la nota se aguanta (el «4-1»). «Duración» y «Silencio» sirven para la partitura. Para añadir una fila, usa la última línea vacía.")
-                eu = st.data_editor(
-                    pd.DataFrame(units, columns=["verso", "sílaba", "notas", "tiempo", "hasta", "duración", "silencio", "amarillo", "subrayado", "pausa", "círculo"]),
-                    num_rows="dynamic", use_container_width=True, hide_index=True, key=f"u-{sel}",
-                    column_config={
-                        "verso": st.column_config.NumberColumn("Verso", min_value=1, step=1, width="small"),
-                        "sílaba": st.column_config.TextColumn("Sílaba"),
-                        "notas": st.column_config.TextColumn("Notas", help="Varias en la misma sílaba: Sib - Re#4"),
-                        "tiempo": st.column_config.SelectboxColumn("Tiempo", options=list(range(1, m + 1)), width="small"),
-                        "hasta": st.column_config.SelectboxColumn("Hasta", options=list(range(1, m + 1)), width="small"),
-                        "amarillo": st.column_config.CheckboxColumn("Amarillo", width="small"),
-                        "subrayado": st.column_config.CheckboxColumn("Flecha", width="small"),
-                        "pausa": st.column_config.CheckboxColumn("Punto", width="small"),
-                        "círculo": st.column_config.TextColumn("Círculo", width="small"),
-                        "duración": st.column_config.TextColumn("Duración", width="medium", help="Ejemplos: negra · corchea · redonda + negra con puntillo · 5.5 (en pulsos, negra = 1)."),
-                        "silencio": st.column_config.NumberColumn("Silencio", min_value=0.0, step=0.25, width="small", help="Silencio después de la nota, en pulsos (1 = negra)."),
-                    },
-                )
-                st.caption("Apuntes de técnica por verso (sepáralos con /). «Parte» pone un título encima del verso, por ejemplo «Estribillo».")
-                el = st.data_editor(
-                    pd.DataFrame(lines, columns=["verso", "parte", "apuntes"]),
-                    num_rows="dynamic", use_container_width=True, hide_index=True, key=f"l-{sel}",
-                    column_config={
-                        "verso": st.column_config.NumberColumn("Verso", min_value=1, step=1, width="small"),
-                        "parte": st.column_config.TextColumn("Parte", width="small"),
-                        "apuntes": st.column_config.TextColumn("Apuntes", width="large"),
-                    },
-                )
-                e1, e2 = st.columns(2)
-                if e1.button("💾 Guardar cambios", type="primary", use_container_width=True, key=f"save-{sel}"):
-                    meta = {"title": title, "page": page, "ts": ts, "tempo": tempo, "general": [g for g in general.splitlines() if g.strip()]}
-                    new = lib.rows_to_song(meta, eu.to_dict("records"), el.to_dict("records"))
-                    row["song"], row["title"], row["page"] = new, new["title"], new["page"]
-                    _, err = safe(lib.save_song, row, sel)
-                    flash("warning" if err else "success", ("Guardado aquí, pero no en GitHub: " + err) if err else "Cambios guardados.")
-                    st.rerun()
-                if photos and e2.button("🔄 Volver a leer la hoja", use_container_width=True, key=f"reread-{sel}"):
-                    res = transcribe(photos, row.get("title", ""))
-                    if res:
-                        st.session_state.pending = {"song": res[0], "doubts": res[1], "images": photos, "target": sel}
-                        st.rerun()
 
         with st.expander("🗑️ Borrar esta canción"):
             st.write("Se borra la canción y su foto. No se puede deshacer.")
