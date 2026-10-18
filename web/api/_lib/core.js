@@ -1,3 +1,4 @@
+// versión 18-oct-v5
 // Utilidades del servidor: clave de acceso, GitHub (rama «datos») y OpenAI.
 const BRANCH = "datos";
 const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "6/8", "12/8"];
@@ -15,6 +16,9 @@ function cleanRepo(repo) {
 
 const CFG = () => ({
   password: process.env.APP_PASSWORD || "",
+  // otras contraseñas con el mismo acceso (por ejemplo, la de la profesora)
+  extra: [process.env.PROFE_PASSWORD, process.env.NAIARA_PASSWORD, process.env.PASSWORD_PROFE].concat(String(process.env.OTRAS_PASSWORDS || "").split(","))
+    .map((p) => String(p || "").trim()).filter(Boolean),
   token: (process.env.GITHUB_TOKEN || "").trim(),
   repo: cleanRepo(process.env.GITHUB_REPO),
   openai: (process.env.OPENAI_API_KEY || "").trim(),
@@ -28,7 +32,10 @@ function handler(fn) {
       const c = CFG();
       if (!c.password) throw new HttpError(500, "Falta APP_PASSWORD en Vercel (Settings → Environment Variables).");
       const given = req.headers["x-clave"] || "";
-      if (decodeURIComponent(given) !== c.password) throw new HttpError(401, "Contraseña incorrecta.");
+      let clave = "";
+      try { clave = decodeURIComponent(given); } catch (e) {}
+      const norm = (x) => String(x || "").trim().toLowerCase();
+      if (!norm(clave) || ![c.password].concat(c.extra).map(norm).includes(norm(clave))) throw new HttpError(401, "Contraseña incorrecta.");
       const out = await fn(req, res, c);
       if (out !== undefined && !res.headersSent) res.status(200).json(out);
     } catch (e) {
