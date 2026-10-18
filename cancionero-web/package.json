@@ -1,5 +1,0 @@
-{
-  "name": "cancionero-de-papa",
-  "private": true,
-  "engines": { "node": ">=18" }
-}
