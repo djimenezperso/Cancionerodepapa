@@ -55,6 +55,8 @@ css.textContent+=
  ".crop canvas{display:block;max-width:100%;height:auto;border-radius:4px}"+
  ".hint button{font:inherit;font-size:14px;font-weight:700;border:0;background:var(--ink);color:var(--sheet);border-radius:8px;padding:6px 12px;min-height:36px;margin-left:4px;cursor:pointer}"+
  ".crop{position:relative}.crop .pcs{display:flex;flex-direction:column;gap:4px;cursor:pointer}"+
+ ".ctip{position:absolute;top:8px;right:8px;font-size:12px;font-weight:700;background:var(--ink);color:var(--sheet);border-radius:999px;padding:2px 9px;opacity:.75;pointer-events:none}"+
+ ".crop.adj .ctip{display:none}@media (hover:hover){.crop .ctip{opacity:0;transition:opacity .15s}.crop:hover .ctip{opacity:.85}}"+
  ".crop.adj{outline:3px solid var(--beat-odd);outline-offset:2px}.crop.adj .pcs{touch-action:none;cursor:grab}"+
  ".cadj{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px;color:var(--ink);padding-top:4px}.cadj span{flex:1;min-width:10em}"+
  ".cadj button{font:inherit;font-size:14px;font-weight:700;border:1px solid var(--line);background:var(--sheet);color:var(--ink);border-radius:8px;padding:4px 12px;min-height:38px;cursor:pointer}"+
@@ -202,7 +204,7 @@ function cropEl(box,approx,k){
   if(!k||!window.onSongEdit) return w;
   // tocar el recorte para ajustarlo: arrastrar = mover la franja; tirador de abajo = más alto o más bajo
   var bar=document.createElement("div"); bar.className="cadj"; bar.hidden=true;
-  var info=document.createElement("span"); info.textContent="Arrastra la hoja arriba o abajo";
+  var info=document.createElement("span"); info.textContent="Arrastra la hoja o usa la rueda del ratón";
   var ok=b("✓ Listo",function(e){ e.stopPropagation(); finish(true); },"cok");
   var no=b("Cancelar",function(e){ e.stopPropagation(); cur=box.slice(); draw(false); finish(false); });
   bar.append(info,no,ok);
@@ -226,6 +228,24 @@ function cropEl(box,approx,k){
     });
   }
   drag(pcs,"move"); drag(grip,"size");
+  // con la rueda del ratón o el touchpad: mover la franja (con Mayúsculas: más alto o más bajo)
+  var wraf=0;
+  w.addEventListener("wheel",function(e){
+    if(!on) return; e.preventDefault();
+    var hpx=pcs.getBoundingClientRect().height||1,per=(cur[2]-cur[1]+2*pad)/hpx*(pcs.children.length||1),dy=e.deltaY*(e.deltaMode===1?16:1)*per*0.25;
+    if(e.shiftKey){ cur=[cur[0],cur[1],Math.max(cur[1]+0.03,Math.min(1,cur[2]+dy))]; }
+    else { var h=cur[2]-cur[1],t=Math.max(0,Math.min(1-h,cur[1]+dy)); cur=[cur[0],t,t+h]; }
+    if(!wraf) wraf=requestAnimationFrame(function(){ wraf=0; draw(true); });
+  },{passive:false});
+  // con las flechas del teclado
+  w.tabIndex=0;
+  w.addEventListener("keydown",function(e){
+    if(e.key==="Enter"&&!on){ start(); return; }
+    if(!on) return;
+    var st2=0.004; if(e.key==="ArrowUp"||e.key==="ArrowDown"){ e.preventDefault(); var d2=e.key==="ArrowDown"?st2:-st2,h=cur[2]-cur[1],t=Math.max(0,Math.min(1-h,cur[1]+d2)); cur=[cur[0],t,t+h]; draw(true); }
+    if(e.key==="Enter") finish(true); if(e.key==="Escape"){ cur=box.slice(); draw(false); finish(false); }
+  });
+  var tipc=document.createElement("span"); tipc.className="ctip"; tipc.textContent="↕ Ajustar"; w.appendChild(tipc);
   return w;
 }
 /* recorta el renglón, quita el margen en blanco y, si en el móvil quedaría pequeño, lo parte en trozos
