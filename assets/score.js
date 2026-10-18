@@ -185,39 +185,56 @@ function render(song,root,o){
   o=o||{}; var k=o.transpose||0,m=build(song,k);
   root.replaceChildren();
   var wrap=document.createElement("div"); wrap.className="score"; root.appendChild(wrap);
-  var h=document.createElement("h2"); h.className="sv-title"; h.textContent=song.title||"Sin título"; wrap.appendChild(h);
+  if(!o.bare){ var h=document.createElement("h2"); h.className="sv-title"; h.textContent=song.title||"Sin título"; wrap.appendChild(h); }
   var meta=document.createElement("div"); meta.className="sv-meta";
   meta.textContent="♩ = "+(song.tempo||80)+(k?"   ·   Tono "+(k>0?"+":"")+k:"")+(m.octUp?"   ·   Clave de sol octava baja (voz de hombre)":"");
-  wrap.appendChild(meta);
+  if(!o.bare) wrap.appendChild(meta);
   // alteraciones a mostrar (se reinician en cada compás)
   m.bars.forEach(function(bar){ var state={}; bar.forEach(function(it){ if(it.rest||!it.note) return; var key=it.note.letter+it.note.oct,acc=it.note.acc||"n",prev=state[key]||"n"; if(it.cont){ state[key]=acc; return; } it.showAcc=(acc!==prev||it.rec)?acc:null; state[key]=acc; }); });
-  var W=Math.max(300,(root.clientWidth||wrap.clientWidth||700)-4),HEAD=46,TS=22;
-  var bw=m.bars.map(function(bar){ return 14+bar.reduce(function(a,it){ return a+itemWidth(it); },0); });
+  var W=Math.max(300,(o.width||root.clientWidth||wrap.clientWidth||700)-4),HEAD=46,TS=22;
+  // trozos a dibujar: normalmente un compás cada uno; «por versos», un compás que mezcla dos versos se parte en dos
+  var segs=[];
+  m.bars.forEach(function(bar,bi){
+    var off0=(bi===0&&m.pickup)?Math.max(0,m.B-bar.reduce(function(a,x){return a+x.d;},0)):0;
+    if(!o.byLine){ segs.push({items:bar,bi:bi,off:off0}); return; }
+    var keys=bar.map(function(it){ var p=it.path||it.owner; return p?p.split(".").slice(0,2).join("."):null; });
+    for(var i=0;i<keys.length;i++) if(keys[i]===null) keys[i]=i?keys[i-1]:null;
+    for(var j=keys.length-1;j>=0;j--) if(keys[j]===null) keys[j]=keys[j+1]||(segs.length?segs[segs.length-1].key:"0.0");
+    var cur=null,off=off0;
+    bar.forEach(function(it,ix){
+      if(!cur||cur.key!==keys[ix]){ if(cur) cur.open=true; cur={items:[],bi:bi,off:off,key:keys[ix]}; segs.push(cur); }
+      cur.items.push(it); off+=it.d;
+    });
+  });
+  var bw=segs.map(function(sg){ return 14+sg.items.reduce(function(a,it){ return a+itemWidth(it); },0); });
   var systems=[],cur=[],used=0;
-  bw.forEach(function(w,i){ var head=HEAD+(systems.length===0&&cur.length===0?TS:0); if(cur.length&&used+w>W-head){ systems.push(cur); cur=[]; used=0; } cur.push(i); used+=w; });
+  bw.forEach(function(w,i){ var head=HEAD+(systems.length===0&&cur.length===0?TS:0);
+    var brk=cur.length&&(used+w>W-head||(o.byLine&&segs[i].key!==segs[cur[0]].key));
+    if(brk){ systems.push(cur); cur=[]; used=0; } cur.push(i); used+=w; });
   if(cur.length) systems.push(cur);
   var pending=null; // ligadura que cruza de sistema
   systems.forEach(function(sys,si){
-    var first=si===0,head=HEAD+(first?TS:0),natural=sys.reduce(function(a,i){return a+bw[i];},0);
-    var stretch=(si<systems.length-1||natural>(W-head)*0.7)?(W-head)/natural:1;
+    var first=si===0,head=HEAD+((first||(o.byLine&&o.tsEach))?TS:0),natural=sys.reduce(function(a,i){return a+bw[i];},0);
+    var lastOfGroup=si===systems.length-1||(o.byLine&&segs[systems[si+1][0]].key!==segs[sys[0]].key);
+    var stretch=(!lastOfGroup||natural>(W-head)*0.7)?(W-head)/natural:1;
     // altura según notas más graves / agudas
     var topY=-6,botY=46;
-    sys.forEach(function(bi){ m.bars[bi].forEach(function(it){ if(!it.rest&&it.note){ var p=posOf(it.note,m.octUp),y=yOf(p),up=p<34;
+    sys.forEach(function(gi){ segs[gi].items.forEach(function(it){ if(!it.rest&&it.note){ var p=posOf(it.note,m.octUp),y=yOf(p),up=p<34;
       topY=Math.min(topY,up?y-36:y-8); botY=Math.max(botY,up?y+8:y+36); } }); });
-    var hasCue=sys.some(function(bi){return m.bars[bi].some(function(it){return it.cues&&it.cues.length;});});
+    var hasCue=sys.some(function(gi){return segs[gi].items.some(function(it){return it.cues&&it.cues.length;});});
     var top=Math.ceil(-topY+8+(hasCue?18:0)),lyrY=Math.ceil(botY+18);
     var svg=E("svg",{width:W,height:top+lyrY+26,viewBox:"0 "+(-top)+" "+W+" "+(top+lyrY+26),"class":"sys",role:"img","aria-label":"Pentagrama"});
-    wrap.appendChild(svg);
+    ((o.byLine&&o.lineBox&&o.lineBox(segs[sys[0]].key))||wrap).appendChild(svg);
     for(var l=0;l<5;l++) E("line",{x1:0,x2:W,y1:l*S,y2:l*S,"stroke-width":"1","class":"staff"},svg);
     E("line",{x1:0.5,x2:0.5,y1:0,y2:40,"stroke-width":"1.2"},svg);
     clef(svg,6,m.octUp);
-    if(first){ T(String(m.M),{x:HEAD+2,y:18,"class":"ts"},svg); T(String(m.den),{x:HEAD+2,y:38,"class":"ts"},svg); }
+    if(first||(o.byLine&&o.tsEach)){ T(String(m.M),{x:HEAD+2,y:18,"class":"ts"},svg); T(String(m.den),{x:HEAD+2,y:38,"class":"ts"},svg); }
     var x=head,heads=[],lyr=[];
     if(pending){ E("path",{d:"M"+(head-14)+","+(pending.y+(pending.up?7:-7))+" Q"+(head-6)+","+(pending.y+(pending.up?12:-12))+" "+(head+2)+","+(pending.y+(pending.up?7:-7)),fill:"none","stroke-width":"1.3"},svg); pending=null; }
-    sys.forEach(function(bi,bix){
+    sys.forEach(function(gi,bix){
       x+=7*stretch;
-      var barItems=m.bars[bi],tot=barItems.reduce(function(a,x){return a+x.d;},0);
-      var groups=beamGroups(barItems,m,(bi===0&&m.pickup)?Math.max(0,m.B-tot):0),inBeam={},drawn={};
+      var sg=segs[gi],barItems=sg.items;
+      var groups=beamGroups(barItems,m,sg.off),inBeam={},drawn={};
       groups.forEach(function(g,gi){ g.forEach(function(ix){ inBeam[ix]=gi; }); });
       barItems.forEach(function(it,ix){
         var w=itemWidth(it)*stretch,cx=x+Math.min(w/2,(it.showAcc?18:12)+4*Math.sqrt(it.d));
@@ -234,7 +251,7 @@ function render(song,root,o){
       groups.forEach(function(g){ drawBeams(svg,g.map(function(ix){return drawn[ix];})); });
       x+=7*stretch;
       var last=bix===sys.length-1&&si===systems.length-1;
-      E("line",{x1:x,x2:x,y1:0,y2:40,"stroke-width":last?"1.2":"1"},svg);
+      if(!sg.open) E("line",{x1:x,x2:x,y1:0,y2:40,"stroke-width":last?"1.2":"1"},svg);
       if(last) E("rect",{x:x+3,y:0,width:4,height:40,"class":"fillink"},svg);
     });
     // arco sobre las notas de una misma sílaba (melisma)
@@ -253,7 +270,7 @@ function render(song,root,o){
   });
   var note=document.createElement("p"); note.className="score-note";
   note.textContent="Duraciones calculadas a partir de los tiempos de la hoja; pueden necesitar algún retoque.";
-  wrap.appendChild(note);
+  if(!o.bare) wrap.appendChild(note);
 }
 window.SCORE={render:render,build:build};
 })();
