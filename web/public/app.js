@@ -1,6 +1,7 @@
 /* Cancionero de Papá — página principal (repertorio, nueva canción y vista de cada canción). */
 (function () {
   "use strict";
+  var VERSION = "18-oct-v5";
   var KEY = "cdp-clave", CACHE = "cdp-canciones", PREF = "cdp-prefs-2";
   var $view = document.getElementById("view"), $marquee = document.getElementById("marquee"), $toast = document.getElementById("toast");
   var state = { songs: null, loading: false, review: null, busy: null, error: null, files: [], q: "" };
@@ -175,6 +176,7 @@
     body.push(h("div", { class: "foot" },
       h("button", { class: "btn small ghost", text: "Recargar", onclick: function () { refresh().then(function () { route(); toast("Al día"); }); } }),
       h("button", { class: "btn small ghost", text: "Descargar copia de seguridad", onclick: backup }),
+      h("span", { class: "lede", style: "margin-left:auto;font-size:13px", text: "Versión " + VERSION }),
       h("button", { class: "btn small ghost", text: "Salir", onclick: function () { try { localStorage.removeItem(KEY); } catch (e) {} route(); } })));
     $view.replaceChildren(h("div", { class: "wrap" }, body));
   }
