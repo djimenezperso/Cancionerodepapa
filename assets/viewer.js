@@ -37,6 +37,29 @@ css.textContent=
  ".ed select,.ed input{font:inherit;font-size:16px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--bg);color:var(--ink);min-height:40px}"+
  ".ed input{width:9em}";
 css.textContent+=
+ ".rbar button.stop{background:#7a2232;border-color:#7a2232;color:#fff6e6;font-size:17px}"+
+ ".lay.wide .rbar button.stop{min-height:52px}"+
+ ".seg{display:flex;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--sheet)}"+
+ ".rbar .seg button{border:0;border-radius:0;min-height:38px;flex:1;white-space:nowrap}"+
+ ".rbar .seg button+button{border-left:1px solid var(--line)}"+
+ ".rbar .seg button.on{background:var(--ink);color:var(--sheet)}"+
+ ".lay.wide .rbar .seg{flex-direction:column} .lay.wide .rbar .seg button+button{border-left:0;border-top:1px solid var(--line)}"+
+ ".page.lines{padding:14px 12px 20px;display:flex;flex-direction:column;gap:14px}"+
+ ".vs-head .sv-title{font-size:1.35em;margin:0}.vs-head .sv-meta{margin-top:4px;white-space:pre}"+
+ "@media (max-width:520px){.vs-clean{font-size:calc(var(--size) * .82)}.vs{grid-template-columns:1.4em minmax(0,1fr)!important;padding:8px 8px 6px 4px!important;gap:6px!important}.page.lines{padding:10px 8px 16px!important}}"+
+ ".vs{display:grid;grid-template-columns:2.1em minmax(0,1fr);gap:8px;border:1px solid var(--line);border-radius:12px;padding:10px 12px 8px 6px;background:var(--sheet);scroll-margin-top:10px}"+
+ ".vs.now{border-color:var(--beat-odd);box-shadow:0 0 0 3px color-mix(in srgb,var(--beat-odd) 22%,transparent)}"+
+ ".vs-n{font-family:var(--f-hand);font-weight:700;font-size:1.05em;color:var(--beat-odd);text-align:center;padding-top:2px}"+
+ ".vs-b{display:flex;flex-direction:column;gap:8px;min-width:0}"+
+ ".crop{display:flex;flex-direction:column;gap:4px;min-height:40px;border-radius:8px;background:var(--rule);border:1px solid var(--line);padding:4px;overflow:hidden}"+
+ ".crop canvas{display:block;max-width:100%;height:auto;border-radius:4px}"+
+ ".crop.approx{border-style:dashed}"+
+ ".vs-clean{border-top:1px dashed var(--line);padding-top:6px}"+
+ ".vs-clean .sv-line{gap:.2em}"+
+ ".vs-staff{border-top:1px dashed var(--line);padding-top:4px;overflow:hidden}"+
+ ".vs-staff svg.sys{display:block;max-width:100%;overflow:visible}"+
+ ".croptools{display:flex;flex-wrap:wrap;gap:4px;align-items:center}"+
+ ".croptools button{font:inherit;font-size:13px;font-weight:700;border:1px solid var(--line);background:var(--sheet);color:var(--ink);border-radius:7px;padding:2px 8px;min-height:30px;cursor:pointer}"+
  "html,body{height:100%;overflow:hidden}"+
  "#app{height:100vh;overflow:auto;box-sizing:border-box;padding:0 2px 30px}"+
  ".lay.wide{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:14px;align-items:start}"+
@@ -65,8 +88,8 @@ var DURS=[["redonda",4],["blanca con puntillo",3],["blanca",2],["negra con punti
 var DSHORT=[["Redonda",4],["Blanca·",3],["Blanca",2],["Negra·",1.5],["Negra",1],["Corchea·",0.75],["Corchea",0.5],["Semi",0.25]];
 var st=window.__vst||(window.__vst={i:-1,k:0,size:22,bpm:80,click:true,mel:true,score:false,edit:false});
 var PREF="cdp-visor-v1";
-try{ var sv=JSON.parse(localStorage.getItem(PREF)||"{}"); ["score","size","click","mel","edit"].forEach(function(k){ if(k in sv) st[k]=sv[k]; }); }catch(e){}
-function savePrefs(){ try{ localStorage.setItem(PREF,JSON.stringify({score:st.score,size:st.size,click:st.click,mel:st.mel,edit:st.edit})); }catch(e){} }
+try{ var sv=JSON.parse(localStorage.getItem(PREF)||"{}"); ["score","view","size","click","mel","edit"].forEach(function(k){ if(k in sv) st[k]=sv[k]; }); }catch(e){}
+function savePrefs(){ try{ localStorage.setItem(PREF,JSON.stringify({score:st.score,view:st.view,size:st.size,click:st.click,mel:st.mel,edit:st.edit})); }catch(e){} }
 var dict={on:false,rec:null,interim:"",last:"",undo:[],err:""};
 var S,pl=window.__vpl||(window.__vpl=new CORE.Player()),root=document.getElementById("app"),lastEl=null,dirty=false,selPath=null,selNote=0,selPaths=[],multi=false,ligar=false,showHelp=false,selRest=false,folded=false;
 
@@ -105,7 +128,9 @@ function show(){
   var kb=b(play.piano?"🎹 Piano ■":"🎹 Piano",function(){ play.piano=!play.piano; restartPlay(s); show(); },play.piano?"pri":"");
   var mb=b(play.click?"🥁 Metrónomo ■":"🥁 Metrónomo",function(){ play.click=!play.click; restartPlay(s); show(); },play.click?"pri":"");
   if(S.length>1) bar.append(b("← Lista",list));
-  bar.append(b(st.score?"📝 Como en la hoja":"🎼 Partitura",function(){ st.score=!st.score; show(); },"sw"));
+  var vw=viewOf(s),vg=document.createElement("div"); vg.className="seg"; vg.setAttribute("role","group"); vg.setAttribute("aria-label","Cómo verla");
+  [["lines",wide?"☰ Por versos":"☰ Versos"],["hoja","📝 Hoja"],["score","🎼 Partitura"]].forEach(function(o){ var bt=b(o[1],function(){ st.view=o[0]; st.score=o[0]==="score"; show(); },vw===o[0]?"on":""); bt.setAttribute("aria-pressed",vw===o[0]?"true":"false"); vg.appendChild(bt); });
+  bar.append(vg);
   if(window.EDITABLE) bar.append(b(st.edit?(dirty?"✏️ Terminar y guardar":"✏️ Terminar"):"✏️ Cambiar notas",function(){
     if(st.edit&&dirty){ save(); return; }
     st.edit=!st.edit; selPath=null; selPaths=[]; if(!st.edit) stopDict(); show(); },st.edit?"edon":""));
@@ -113,6 +138,7 @@ function show(){
   if(dirty){ bar.append(b("💾 Guardar cambios",save,"ok"),b("Deshacer",function(){ S=JSON.parse(JSON.stringify(window.SONGS)); dirty=false; selPath=null; show(); })); }
   function grp(){ var g=document.createElement("div"); g.className="grp"; for(var i=0;i<arguments.length;i++) g.appendChild(arguments[i]); return g; }
   var moreOpen=wide||st.more;
+  if(play.piano||play.click) bar.append(b("⏹ Parar",stopPlay,"stop","Parar el piano y el metrónomo"));
   bar.append(kb,mb);
   if(!wide) bar.append(b(st.more?"⋯ Menos":"⋯",function(){ st.more=!st.more; show(); },"","Más controles"));
   if(moreOpen) bar.append(grp(sp("♩=","lbl"),b("−",function(){st.bpm=Math.max(30,st.bpm-4);restartPlay(s);show();},"","Más lento"),sp(st.bpm),b("+",function(){st.bpm=Math.min(240,st.bpm+4);restartPlay(s);show();},"","Más rápido")),
@@ -126,7 +152,8 @@ function show(){
   if(st.edit&&!st.k&&(!SR||dict.needText)) panel.appendChild(textDict()); // solo de recambio, si el dictado no funciona
   else if(st.edit&&!selPath){ var h=document.createElement("p"); h.className="hint"; h.textContent="Toca la nota que quieras cambiar."+(st.k?" (Para cambiar notas, pon el tono a 0.)":""); side.appendChild(h); }
   var pg=document.createElement("div"); pg.className="page"+(st.edit?" editing":""); main.appendChild(pg);
-  if(st.score&&window.SCORE){ pg.classList.add("plain"); SCORE.render(s,pg,{transpose:st.k}); }
+  if(vw==="lines"){ pg.classList.add("plain","lines"); renderLines(s,pg,main); }
+  else if(vw==="score"&&window.SCORE){ pg.classList.add("plain"); SCORE.render(s,pg,{transpose:st.k}); }
   else CORE.render(s,pg,{transpose:st.k});
   if(st.edit&&!st.k){
     pg.addEventListener("click",function(e){
@@ -148,6 +175,90 @@ function show(){
   }
   root.scrollTop=keepScroll;
   if(!window.EMBEDDED){ try{ navigator.wakeLock&&navigator.wakeLock.request("screen").catch(function(){}); }catch(e){} }
+}
+/* ---------- por versos: foto del verso, verso limpio y pentagrama, uno debajo de otro ---------- */
+function viewOf(s){ var v=st.view||(st.score?"score":"lines"); if(v==="lines"&&!window.SCORE) v="hoja"; return v; }
+function lineKeys(s){ var out=[]; (s.sections||[]).forEach(function(sec,si){ (sec.lines||[]).forEach(function(l,li){ out.push({key:si+"."+li,line:l}); }); }); return out; }
+function guessBoxes(keys){ // sin datos de la IA: se reparte la página a partes iguales
+  var n=keys.length,top=0.08,bot=0.96,h=(bot-top)/Math.max(1,n);
+  return keys.map(function(k,i){ return [1,top+i*h,top+(i+1)*h]; });
+}
+function cropEl(box,approx){
+  var ph=(window.PHOTOS||[])[Math.max(0,(box[0]||1)-1)]; if(!ph) return null;
+  var pad=0.006,y0=Math.max(0,box[1]-pad),y1=Math.min(1,box[2]+pad);
+  var w=document.createElement("div"); w.className="crop"+(approx?" approx":""); w.setAttribute("role","img"); w.setAttribute("aria-label","Este verso en la hoja de Papá");
+  var img=new Image(); img.decoding="async";
+  img.onload=function(){ try{ drawCrop(w,img,y0,y1); }catch(e){} };
+  img.src=ph; return w;
+}
+/* recorta el renglón, quita el margen en blanco y, si en el móvil quedaría pequeño, lo parte en trozos
+   (por un hueco entre palabras) para que se lea al mismo tamaño que el verso limpio */
+function drawCrop(w,img,y0,y1){
+  var W=img.naturalWidth,H=img.naturalHeight,sy=Math.round(y0*H),sh=Math.max(4,Math.round((y1-y0)*H));
+  var aH=90,a=aH/sh,aW=Math.max(10,Math.round(W*a)),cv=document.createElement("canvas"); cv.width=aW; cv.height=aH;
+  var cx=cv.getContext("2d",{willReadFrequently:true}); cx.drawImage(img,0,sy,W,sh,0,0,aW,aH);
+  var d=cx.getImageData(0,0,aW,aH).data,gray=new Uint8Array(aW*aH),hist=new Array(256).fill(0);
+  for(var i=0,j=0;i<d.length;i+=4,j++){ var g=(d[i]*0.3+d[i+1]*0.59+d[i+2]*0.11)|0; gray[j]=g; hist[g]++; }
+  var acc=0,bg=255; for(var v=255;v>=0;v--){ acc+=hist[v]; if(acc>aW*aH*0.25){ bg=v; break; } } // tono del papel
+  var thr=bg-55,col=new Array(aW).fill(0);
+  for(var x=0;x<aW;x++){ var c=0; for(var y=0;y<aH;y++) if(gray[y*aW+x]<thr) c++; col[x]=c; }
+  var L=0,R=aW-1; while(L<aW&&col[L]<2) L++; while(R>L&&col[R]<2) R--;
+  if(R-L<aW*0.15){ L=0; R=aW-1; }
+  L=Math.max(0,L-Math.round(aH*0.25)); R=Math.min(aW-1,R+Math.round(aH*0.25));
+  var cw=Math.max(200,(w.clientWidth||300)-10),target=Math.max(56,st.size*3.6),contentW=(R-L)/a,disp=contentW*(target/sh);
+  var n=Math.max(1,Math.min(3,Math.ceil(disp/(cw*1.3))));
+  var cuts=[L];
+  for(var k=1;k<n;k++){ var ideal=L+(R-L)*k/n,win=Math.round((R-L)/n*0.18),best=Math.round(ideal),bs=1e9;
+    for(var xx=Math.round(ideal-win);xx<=Math.round(ideal+win);xx++){ if(xx<=cuts[cuts.length-1]+5||xx>=R) continue; var s2=0; for(var q=-3;q<=3;q++) s2+=col[xx+q]||0; s2+=Math.abs(xx-ideal)*0.02; if(s2<bs){ bs=s2; best=xx; } }
+    cuts.push(best); }
+  cuts.push(R);
+  var dpr=Math.min(2,window.devicePixelRatio||1); w.replaceChildren(); w.style.aspectRatio="";
+  for(var p=0;p<n;p++){
+    var px0=cuts[p]/a,px1=cuts[p+1]/a,pw=px1-px0,show=Math.min(cw,pw*(target/sh)*(n>1?99:1.25));
+    var c2=document.createElement("canvas"); c2.width=Math.round(show*dpr); c2.height=Math.round(sh*(show/pw)*dpr);
+    c2.getContext("2d").drawImage(img,px0,sy,pw,sh,0,0,c2.width,c2.height);
+    c2.style.width=Math.round(show)+"px"; w.appendChild(c2);
+  }
+}
+function renderLines(s,pg,main){
+  var keys=lineKeys(s),has=keys.some(function(k){ return k.line.box; }),guess=guessBoxes(keys),photos=(window.PHOTOS||[]).length;
+  var head=document.createElement("div"); head.className="vs-head";
+  var h=document.createElement("h2"); h.className="sv-title"; h.textContent=s.title||"Sin título"; head.appendChild(h);
+  var meta=document.createElement("div"); meta.className="sv-meta"; meta.textContent="Compás "+(s.ts||"4/4")+"   ♩ = "+(s.tempo||80)+(st.k?"   Tono "+(st.k>0?"+":"")+st.k:""); head.appendChild(meta);
+  pg.appendChild(head);
+  if(photos&&!has&&window.onLocate){ var nb=document.createElement("p"); nb.className="hint"; nb.append("Los recortes de la foto son aproximados. ");
+    nb.append(b("Encajarlos con la IA",function(){ window.onLocate(); },"pri")); pg.appendChild(nb); }
+  // hoja limpia completa, fuera de la vista; luego cada verso se lleva a su tarjeta
+  var tmp=document.createElement("div"); CORE.render(s,tmp,{transpose:st.k});
+  var svLines=tmp.querySelectorAll(".sv-line"),boxes={},n=0;
+  keys.forEach(function(k,i){
+    var card=document.createElement("section"); card.className="vs"; card.dataset.line=k.key;
+    var num=document.createElement("div"); num.className="vs-n"; num.textContent=String(i+1); card.appendChild(num);
+    var body=document.createElement("div"); body.className="vs-b"; card.appendChild(body);
+    var box=k.line.box||(photos?guess[i]:null);
+    if(box){ var c=cropEl(box,!k.line.box); if(c){ body.appendChild(c); if(st.edit&&!st.k) body.appendChild(cropTools(k,box)); } }
+    var clean=document.createElement("div"); clean.className="sv vs-clean"; if(svLines[i]) clean.appendChild(svLines[i]); body.appendChild(clean);
+    var staff=document.createElement("div"); staff.className="score vs-staff"; body.appendChild(staff); boxes[k.key]=staff;
+    pg.appendChild(card);
+  });
+  var gen=tmp.querySelector(".sv-general"); if(gen){ var gw=document.createElement("div"); gw.className="sv"; gw.appendChild(gen); pg.appendChild(gw); }
+  if(window.SCORE){
+    var w0=(pg.querySelector(".vs-staff")||pg).clientWidth||((main.clientWidth||600)-60);
+    var sc=document.createElement("div"); sc.style.display="none"; pg.appendChild(sc);
+    SCORE.render(s,sc,{transpose:st.k,byLine:true,bare:true,tsEach:false,width:w0,lineBox:function(key){ return boxes[key]; }});
+    sc.remove();
+  }
+}
+function cropTools(k,box){
+  var r=document.createElement("div"); r.className="croptools";
+  function set(nb){ k.line.box=[nb[0],Math.round(Math.max(0,nb[1])*1000)/1000,Math.round(Math.min(1,nb[2])*1000)/1000]; changed(); }
+  r.append(sp("Recorte","lbl"),
+    b("▲",function(){ set([box[0],box[1]-0.01,box[2]-0.01]); },"","Subir el recorte"),
+    b("▼",function(){ set([box[0],box[1]+0.01,box[2]+0.01]); },"","Bajar el recorte"),
+    b("Más alto",function(){ set([box[0],box[1]-0.006,box[2]+0.006]); }),
+    b("Más bajo",function(){ if(box[2]-box[1]>0.03) set([box[0],box[1]+0.006,box[2]-0.006]); }));
+  if((window.PHOTOS||[]).length>1) r.append(b("Hoja "+(box[0]||1)+" ⇄",function(){ var np=(box[0]%window.PHOTOS.length)+1; set([np,box[1],box[2]]); }));
+  return r;
 }
 function durRow(apply,cur){
   var r=document.createElement("div"); r.className="r";
@@ -279,6 +390,7 @@ function restartPlay(s){
   pl.play(s,{tempo:st.bpm,transpose:st.k,click:play.click,melody:play.piano,piano:true,onTick:tick,
     onEnd:function(){ if(pl.__stopping) return; play.piano=false; play.click=false; tick(null); show(); }});
 }
+function stopPlay(){ play.piano=false; play.click=false; pl.__stopping=true; pl.stop(); pl.__stopping=false; tick(null); show(); }
 function transposeAll(k){
   allPaths().forEach(function(p){ var u=unitAt(p); u.n=(u.n||[]).map(function(n){ var q=parse(n); return fmt(fromMidi(midiOf(q)+k,k>0)); }); });
 }
@@ -662,7 +774,12 @@ function applyTokens(w,raw){
   if(!changedSome&&!nav){ dict.last="No he entendido: «"+raw.trim()+"»"; }
 }
 function save(){ stopDict(); if(window.onSongEdit){ window.onSongEdit(S[st.i]); dirty=false; selPath=null; st.edit=false; show(); } }
-function tick(p){ if(lastEl) lastEl.classList.remove("now"); lastEl=null; if(!p) return; var e=document.querySelector('[data-p="'+p+'"]'); if(e){ e.classList.add("now"); lastEl=e; var r=e.getBoundingClientRect(); if(r.top<70||r.bottom>innerHeight-40) e.scrollIntoView({block:"center",behavior:"smooth"}); } }
+var lastCard=null;
+function tick(p){ if(lastEl) lastEl.classList.remove("now"); lastEl=null;
+  var card=p?document.querySelector('.vs[data-line="'+p.split(".").slice(0,2).join(".")+'"]'):null;
+  if(card!==lastCard){ if(lastCard) lastCard.classList.remove("now"); if(card){ card.classList.add("now"); var sd=root.querySelector(".lay:not(.wide) .side"),off=sd?sd.offsetHeight+8:10; root.scrollTo({top:root.scrollTop+card.getBoundingClientRect().top-root.getBoundingClientRect().top-off,behavior:"smooth"}); } lastCard=card; }
+  if(!p) return; var e=document.querySelector('[data-p="'+p+'"]'); if(card) return e&&(e.classList.add("now"),lastEl=e);
+  if(e){ e.classList.add("now"); lastEl=e; var r=e.getBoundingClientRect(); if(r.top<70||r.bottom>innerHeight-40) e.scrollIntoView({block:"center",behavior:"smooth"}); } }
 var lastWide=null,rsz=null;
 window.addEventListener("resize",function(){ clearTimeout(rsz); rsz=setTimeout(function(){ if(st.i>=0&&S&&S.length&&((root.clientWidth>=760)!==lastWide)) show(); },150); });
 function start(){
