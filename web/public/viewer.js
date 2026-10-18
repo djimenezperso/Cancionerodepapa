@@ -1,4 +1,4 @@
-/* versión 18-oct-v5 */
+/* versión 18-oct-v6 */
 (function(){
 var css=document.createElement("style");
 css.textContent=
@@ -38,6 +38,9 @@ css.textContent=
  ".ed select,.ed input{font:inherit;font-size:16px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--bg);color:var(--ink);min-height:40px}"+
  ".ed input{width:9em}";
 css.textContent+=
+ ".lay .bottom:empty{display:none}"+
+ ".lay.short .rbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.lay.short .rbar::-webkit-scrollbar{display:none}.lay.short .rbar>*{flex:none}"+
+ "@media (hover:none){.crop .ctip{font-size:0;padding:3px 6px;opacity:.55;top:auto;bottom:6px;right:6px}.crop .ctip::before{content:'↕';font-size:13px}}"+
  ".rbar button.stop{background:#7a2232;border-color:#7a2232;color:#fff6e6;font-size:17px}"+
  ".lay.wide .rbar button.stop{min-height:52px}"+
  ".seg{display:flex;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--sheet)}"+
@@ -125,8 +128,9 @@ function list(){
 }
 function show(){
   savePrefs(); var s=S[st.i]; var keepScroll=root.scrollTop; root.replaceChildren(); document.documentElement.style.setProperty("--size",st.size+"px");
-  var wide=root.clientWidth>=760; lastWide=wide;
-  var lay=document.createElement("div"); lay.className="lay"+(wide?" wide":""); var main=document.createElement("div"),side=document.createElement("div"); side.className="side";
+  var wide=root.clientWidth>=760; lastWide=wide; lastW=root.clientWidth;
+  var shortH=window.innerHeight<520,tiny=root.clientWidth<520;
+  var lay=document.createElement("div"); lay.className="lay"+(wide?" wide":"")+(shortH&&!wide?" short":""); var main=document.createElement("div"),side=document.createElement("div"); side.className="side";
   var panel=side; // en estrecho, los paneles van abajo y fijos
   if(wide){ lay.append(main,side); } else {
     var bottom=document.createElement("div"); bottom.className="bottom"+(folded?" folded":""); lay.append(side,main,bottom); panel=bottom;
@@ -136,12 +140,12 @@ function show(){
   var bar=document.createElement("div"); bar.className="rbar";
   // 🎹 Piano y 🥁 Metrónomo se encienden y apagan; si alguno está encendido, suena
   var kb=b(play.piano?"🎹 Piano ■":"🎹 Piano",function(){ play.piano=!play.piano; restartPlay(s); show(); },play.piano?"pri":"");
-  var mb=b(play.click?"🥁 Metrónomo ■":"🥁 Metrónomo",function(){ play.click=!play.click; restartPlay(s); show(); },play.click?"pri":"");
+  var mb=b((tiny||shortH)?(play.click?"🥁 Metro ■":"🥁 Metro"):(play.click?"🥁 Metrónomo ■":"🥁 Metrónomo"),function(){ play.click=!play.click; restartPlay(s); show(); },play.click?"pri":"");
   if(S.length>1) bar.append(b("← Lista",list));
   var vw=viewOf(s),vg=document.createElement("div"); vg.className="seg"; vg.setAttribute("role","group"); vg.setAttribute("aria-label","Cómo verla");
-  [["lines",wide?"☰ Por versos":"☰ Versos"],["hoja","📝 Hoja"],["score","🎼 Partitura"]].forEach(function(o){ var bt=b(o[1],function(){ st.view=o[0]; st.score=o[0]==="score"; show(); },vw===o[0]?"on":""); bt.setAttribute("aria-pressed",vw===o[0]?"true":"false"); vg.appendChild(bt); });
+  [["lines",wide?"☰ Por versos":"Versos"],["hoja",wide?"📝 Hoja":"Hoja"],["score",wide?"🎼 Partitura":"Partitura"]].forEach(function(o){ var bt=b(o[1],function(){ st.view=o[0]; st.score=o[0]==="score"; show(); },vw===o[0]?"on":""); bt.setAttribute("aria-pressed",vw===o[0]?"true":"false"); vg.appendChild(bt); });
   bar.append(vg);
-  if(window.EDITABLE) bar.append(b(st.edit?(dirty?"✏️ Terminar y guardar":"✏️ Terminar"):"✏️ Cambiar notas",function(){
+  if(window.EDITABLE) bar.append(b(st.edit?(dirty?"✏️ Terminar y guardar":"✏️ Terminar"):((tiny||shortH)?"✏️ Notas":"✏️ Cambiar notas"),function(){
     if(st.edit&&dirty){ save(); return; }
     st.edit=!st.edit; selPath=null; selPaths=[]; if(!st.edit) stopDict(); show(); },st.edit?"edon":""));
   if(window.EDITABLE&&SR) bar.append(b(dict.on?"⏹ Parar dictado":"🎤 Dictar",function(){ if(dict.on) stopDict(); else startDict(); show(); },dict.on?"ok":""));
@@ -272,7 +276,7 @@ function drawCrop(w,img,y0,y1,forceN){
   cuts.push(R);
   var dpr=Math.min(2,window.devicePixelRatio||1); w.replaceChildren(); w.style.aspectRatio="";
   for(var p=0;p<n;p++){
-    var px0=cuts[p]/a,px1=cuts[p+1]/a,pw=px1-px0,show=Math.min(cw,pw*(target/sh)*(n>1?99:1.25));
+    var px0=cuts[p]/a,px1=cuts[p+1]/a,pw=px1-px0,show=Math.min(cw,pw*(target/sh)*(n>1?99:1.8));
     var c2=document.createElement("canvas"); c2.width=Math.round(show*dpr); c2.height=Math.round(sh*(show/pw)*dpr);
     c2.getContext("2d").drawImage(img,px0,sy,pw,sh,0,0,c2.width,c2.height);
     c2.style.width=Math.round(show)+"px"; w.appendChild(c2);
@@ -840,7 +844,8 @@ function tick(p){ if(lastEl) lastEl.classList.remove("now"); lastEl=null;
   if(!p) return; var e=document.querySelector('[data-p="'+p+'"]'); if(card) return e&&(e.classList.add("now"),lastEl=e);
   if(e){ e.classList.add("now"); lastEl=e; var r=e.getBoundingClientRect(); if(r.top<70||r.bottom>innerHeight-40) e.scrollIntoView({block:"center",behavior:"smooth"}); } }
 var lastWide=null,rsz=null;
-window.addEventListener("resize",function(){ clearTimeout(rsz); rsz=setTimeout(function(){ if(st.i>=0&&S&&S.length&&((root.clientWidth>=760)!==lastWide)) show(); },150); });
+var lastW=0;
+window.addEventListener("resize",function(){ clearTimeout(rsz); rsz=setTimeout(function(){ var w=root.clientWidth; if(st.i>=0&&S&&S.length&&(((w>=760)!==lastWide)||Math.abs(w-lastW)>30)){ show(); } },200); });
 function start(){
   S=JSON.parse(JSON.stringify(window.SONGS||[])); dirty=false; selPath=null;
   if(!S.length){ root.textContent="No hay canciones."; return; }
