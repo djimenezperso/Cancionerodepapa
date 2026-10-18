@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Cancionero de Papá</title>
+<meta name="description" content="Las hojas de canto de Papá, pasadas a limpio y en partitura.">
+<meta name="theme-color" content="#151a2e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,600;1,6..96,400;1,6..96,500;1,6..96,700&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="g-clef" viewBox="120 -900 422 1191"><path transform="scale(1 -1)" d="M434 2Q464 -103 464 -170Q464 -223 427.0 -257.0Q390 -291 337 -291Q287 -291 250.0 -261.5Q213 -232 213 -190Q213 -160 233.5 -133.5Q254 -107 283.5 -107.0Q313 -107 331.5 -128.5Q350 -150 350 -178Q350 -240 280 -240Q298 -268 338 -268Q353 -268 368.5 -263.5Q384 -259 401.0 -248.0Q418 -237 428.5 -213.5Q439 -190 439 -157Q439 -136 411 -6Q389 -12 356 -12Q259 -12 189.5 60.0Q120 132 120 232Q120 267 131.5 303.0Q143 339 157.5 366.5Q172 394 200.5 428.5Q229 463 248.5 483.5Q268 504 303 539Q280 621 280 689Q280 779 313.0 839.5Q346 900 379 900Q389 900 401.5 887.0Q414 874 426.0 851.0Q438 828 446.5 790.5Q455 753 455 710Q455 551 342 447L368 329Q384 332 397 332Q458 332 500.0 282.5Q542 233 542 162Q542 44 434 2ZM426 746Q426 801 394 801Q358 801 333.0 748.0Q308 695 308 630Q308 588 321 557Q359 580 392.5 639.5Q426 699 426 746ZM498 128Q498 183 466.0 216.0Q434 249 383 249L428 23Q498 52 498 128ZM407 17 361 247Q334 241 311.5 214.0Q289 187 289 158Q289 143 295.0 128.5Q301 114 309.5 104.0Q318 94 327.0 86.0Q336 78 342.0 74.5Q348 71 348 71L340 66Q307 75 277.5 106.0Q248 137 248 184Q248 231 277.5 270.5Q307 310 343 323L325 430Q168 299 168 177Q168 104 223.0 55.0Q278 6 348 6Q365 6 407 17Z"/></symbol><symbol id="g-n8" viewBox="35 -767 438 777"><path transform="scale(1 -1)" d="M35 59Q35 111 86.0 151.5Q137 192 194 192Q228 192 253 175V767H274Q283 709 307.0 663.0Q331 617 358.5 587.5Q386 558 412.0 529.5Q438 501 455.5 462.5Q473 424 473 376Q473 291 402 177H379Q384 188 395.5 212.0Q407 236 411.0 245.0Q415 254 422.0 272.0Q429 290 431.5 301.5Q434 313 436.5 329.0Q439 345 439 361Q439 428 389.5 486.0Q340 544 275 548V120Q275 64 226.0 27.0Q177 -10 118 -10Q85 -10 60.0 9.5Q35 29 35 59Z"/></symbol><symbol id="g-n16" viewBox="38 -770 626 780"><path transform="scale(1 -1)" d="M637 588 278 680V212Q278 156 229.0 119.0Q180 82 121 82Q88 82 63.0 101.5Q38 121 38 151Q38 203 89.0 243.5Q140 284 197 284Q228 284 251 269V770L664 678V120Q664 64 615.0 27.0Q566 -10 507 -10Q474 -10 449.0 9.5Q424 29 424 59Q424 111 475.0 151.5Q526 192 583 192Q614 192 637 177Z"/></symbol><symbol id="g-n4" viewBox="38 -767 240 777"><path transform="scale(1 -1)" d="M38 59Q38 111 89.0 151.5Q140 192 197 192Q230 192 256 175V767H278V120Q278 64 229.0 27.0Q180 -10 121 -10Q88 -10 63.0 9.5Q38 29 38 59Z"/></symbol></svg>
+<header class="marquee" id="marquee" hidden>
+  <div class="staff" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i>
+    <svg class="float n1"><use href="#g-n8"/></svg><svg class="float n2"><use href="#g-n16"/></svg><svg class="float n3"><use href="#g-n4"/></svg></div>
+  <a class="brand" href="#/" aria-label="Cancionero de Papá, ir al repertorio">
+    <svg class="clef" aria-hidden="true"><use href="#g-clef"/></svg>
+    <span class="wordmark"><span class="w1">Cancionero</span><span class="w2">de Papá</span></span>
+  </a>
+  <nav class="tabs" aria-label="Secciones">
+    <a href="#/" data-tab="repertorio">Repertorio</a>
+    <a href="#/nueva" data-tab="nueva">Nueva canción</a>
+  </nav>
+</header>
+<main id="view"></main>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
