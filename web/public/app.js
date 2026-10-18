@@ -1,7 +1,7 @@
 /* Cancionero de Papá — página principal (repertorio, nueva canción y vista de cada canción). */
 (function () {
   "use strict";
-  var VERSION = "18-oct-v5";
+  var VERSION = "18-oct-v6";
   var KEY = "cdp-clave", CACHE = "cdp-canciones", PREF = "cdp-prefs-2";
   var $view = document.getElementById("view"), $marquee = document.getElementById("marquee"), $toast = document.getElementById("toast");
   var state = { songs: null, loading: false, review: null, busy: null, error: null, files: [], q: "" };
