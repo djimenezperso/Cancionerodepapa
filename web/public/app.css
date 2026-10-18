@@ -178,3 +178,14 @@ textarea.input{min-height:180px;resize:vertical;line-height:1.5}
   .busy .metro{animation:none}
   .toast{transition:none}
 }
+
+/* móvil tumbado: casi toda la pantalla para la partitura */
+@media (max-height:520px){
+  .on-song .marquee{display:none}
+  .on-song main{padding-top:6px;padding-bottom:6px}
+  .on-song .songbar{margin:0 0 6px}
+  .on-song .songbar h1{font-size:20px}
+  .on-song .btn.small{min-height:34px;padding:4px 12px}
+  .on-song .stand iframe{height:calc(100dvh - 60px);min-height:0}
+  .on-song .sheet-photo{max-height:calc(100dvh - 60px)}
+}
