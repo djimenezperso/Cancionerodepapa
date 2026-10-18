@@ -44,7 +44,14 @@
     opts = opts || {};
     var init = { method: opts.method || "GET", headers: { "x-clave": encodeURIComponent(clave()) } };
     if (opts.body) { init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(opts.body); }
-    return fetch("/api/" + path, init).then(function (r) {
+    var ctl = window.AbortController ? new AbortController() : null, timer = null;
+    if (ctl) { init.signal = ctl.signal; timer = setTimeout(function () { ctl.abort(); }, path === "read" || path === "lines" || path === "rhythm" ? 300000 : 40000); }
+    return fetch("/api/" + path, init).catch(function (e) {
+      throw new Error(e && e.name === "AbortError" ? "El servidor no contesta. Revisa en Vercel que la app esté desplegada y prueba otra vez." : "No hay conexión con el servidor.");
+    }).then(function (r) {
+      clearTimeout(timer);
+      var ct = r.headers.get("content-type") || "";
+      if (!opts.raw && r.status === 404 && ct.indexOf("json") < 0) throw new Error("No encuentro el servidor de la app (/api). En Vercel, Settings → General → Root Directory tiene que ser «web».");
       if (opts.raw && r.ok) return r.blob();
       return r.text().then(function (t) {
         var j = {}; try { j = JSON.parse(t); } catch (e) {}
@@ -111,7 +118,7 @@
     document.querySelectorAll(".tabs a").forEach(function (a) { a.classList.toggle("on", a.dataset.tab === (parts[0] === "nueva" ? "nueva" : parts[0] === "" ? "repertorio" : "")); });
     if (state.songs == null) {
       state.songs = load(CACHE, null);
-      if (state.songs == null) { $view.replaceChildren(busy("Abriendo el cancionero…")); refresh().then(route); return; }
+      if (state.songs == null) { $view.replaceChildren(busy("Abriendo el cancionero…")); refresh().then(function () { if (state.songs == null) state.songs = []; route(); }); return; }
       refresh().then(function () { if (!location.hash.match(/^#\/c\//) && !state.busy) route(); });
     }
     document.body.classList.toggle("on-song", parts[0] === "c");
