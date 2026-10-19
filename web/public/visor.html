@@ -20,6 +20,13 @@
 .ed{border-color:#b08b33!important}
 .hint{color:#1b2036!important;background:#f3e6bf!important}
 </style>
+<!-- Vercel Web Analytics. Visita la web con ?soyyo=1 para marcar este navegador como "yo" (y ?noyo=1 para quitarlo). -->
+<script>
+(function(){try{var q=new URLSearchParams(location.search);if(q.has('soyyo'))localStorage.setItem('va-soy-yo','1');if(q.has('noyo'))localStorage.removeItem('va-soy-yo');}catch(e){}})();
+window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};
+window.va('beforeSend',function(ev){try{if(localStorage.getItem('va-soy-yo')){var u=new URL(ev.url);u.searchParams.delete('soyyo');u.searchParams.set('utm_source','yo');ev.url=u.toString();}}catch(e){}return ev;});
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </head><body><div id="app"></div>
 <script>window.onerror=function(m,src,l){ var a=document.getElementById("app"); if(a&&!a.children.length){ a.innerHTML='<p style="font:16px system-ui;color:#7a2232;padding:20px">No se ha podido abrir la partitura: '+String(m).replace(/</g,"&lt;")+' ('+String(src||"").split("/").pop()+':'+l+')</p>'; } };</script>
 <script src="core.js"></script>
