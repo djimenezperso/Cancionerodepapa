@@ -1,4 +1,4 @@
-/* versión 18-oct-v6 */
+/* versión 18-oct-v7 */
 (function(){
 var css=document.createElement("style");
 css.textContent=
@@ -268,7 +268,7 @@ function drawCrop(w,img,y0,y1,forceN){
   if(R-L<aW*0.15){ L=0; R=aW-1; }
   L=Math.max(0,L-Math.round(aH*0.25)); R=Math.min(aW-1,R+Math.round(aH*0.25));
   var cw=Math.max(200,(w.clientWidth||300)-10),target=Math.max(56,st.size*3.6),contentW=(R-L)/a,disp=contentW*(target/sh);
-  var n=forceN||Math.max(1,Math.min(3,Math.ceil(disp/(cw*1.3))));
+  var n=1; // la línea entera de una pieza, sin partirla (en el móvil se ve más pequeña)
   var cuts=[L];
   for(var k=1;k<n;k++){ var ideal=L+(R-L)*k/n,win=Math.round((R-L)/n*0.18),best=Math.round(ideal),bs=1e9;
     for(var xx=Math.round(ideal-win);xx<=Math.round(ideal+win);xx++){ if(xx<=cuts[cuts.length-1]+5||xx>=R) continue; var s2=0; for(var q=-3;q<=3;q++) s2+=col[xx+q]||0; s2+=Math.abs(xx-ideal)*0.02; if(s2<bs){ bs=s2; best=xx; } }
